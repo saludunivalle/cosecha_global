@@ -59,6 +59,161 @@ function removeAccents(str: string): string {
 }
 
 /**
+ * Extrae una actividad de investigación de una fila, buscando inteligentemente el nombre del proyecto
+ * Similar al enfoque de Puppeteer pero usando el HTML ya parseado
+ */
+function extraerActividadInvestigacionDeFila(
+  cells: string[],
+  headers: string[],
+  headersOriginales?: string[],
+  rowHtml?: string
+): Record<string, any> | null {
+  const obj: Record<string, any> = {};
+  let nombreProyecto = '';
+  let aprobadoPor = '';
+  let escuelaDpto = '';
+  let horasSemestre = '';
+  
+  // Mapear usando headers si están disponibles
+  if (headers.length > 0) {
+    headers.forEach((header, ci) => {
+      const valor = cells[ci]?.trim() || '';
+      const headerUpper = header.toUpperCase().trim();
+      
+      obj[header] = valor;
+      
+      // Extraer APROBADO POR
+      if (headerUpper.includes('APROBADO') && headerUpper.includes('POR')) {
+        aprobadoPor = valor;
+        obj['APROBADO POR'] = valor;
+      }
+      
+      // Extraer nombre del proyecto
+      if (headerUpper.includes('NOMBRE') && 
+          (headerUpper.includes('PROYECTO') || 
+           headerUpper.includes('ANTEPROYECTO') || 
+           headerUpper.includes('PROPUESTA') ||
+           headerUpper.includes('INVESTIGACION'))) {
+        if (valor && valor !== '–' && valor !== '-' && !valor.match(/^[\s\-–]+$/)) {
+          nombreProyecto = valor;
+          obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = valor;
+        }
+      }
+      
+      // Extraer Escuela o Dpto
+      if (headerUpper.includes('ESCUELA') || 
+          headerUpper.includes('DPTO') || 
+          headerUpper.includes('DEPARTAMENTO')) {
+        escuelaDpto = valor;
+        obj['Escuela o Dpto'] = valor;
+      }
+      
+      // Extraer HORAS SEMESTRE
+      if ((headerUpper.includes('HORAS') && headerUpper.includes('SEMESTRE')) ||
+          headerUpper === 'HORAS SEMESTRE' ||
+          (headerUpper.includes('HORAS') && !headerUpper.includes('TOTAL'))) {
+        horasSemestre = valor;
+        obj['HORAS SEMESTRE'] = valor;
+      }
+    });
+  }
+  
+  // Si no se encontró el nombre del proyecto, buscar en todas las celdas
+  if (!nombreProyecto) {
+    // Buscar la celda más larga que no sea un header conocido
+    let mejorCandidato = { celda: '', indice: -1, longitud: 0 };
+    
+    for (let ci = 0; ci < cells.length; ci++) {
+      const celda = cells[ci]?.trim() || '';
+      if (!celda || celda.length < 10) continue;
+      
+      const celdaUpper = celda.toUpperCase();
+      const header = headers[ci] || '';
+      const headerUpper = header.toUpperCase();
+      
+      // Excluir headers conocidos, guiones, números, etc.
+      const esHeaderConocido = 
+        celdaUpper.includes('ESCUELA') ||
+        celdaUpper.includes('DPTO') ||
+        celdaUpper.includes('DEPARTAMENTO') ||
+        celdaUpper.includes('APROBADO') ||
+        headerUpper.includes('HORAS') ||
+        headerUpper.includes('APROBADO') ||
+        celda === '–' ||
+        celda === '-' ||
+        celda.match(/^[\s\-–]+$/) ||
+        celda.match(/^\d+\.?\d*$/) || // Solo números
+        celda.length < 15; // Muy corto
+      
+      if (!esHeaderConocido && celda.length > mejorCandidato.longitud) {
+        mejorCandidato = { celda, indice: ci, longitud: celda.length };
+      }
+    }
+    
+    if (mejorCandidato.celda && mejorCandidato.longitud > 15) {
+      nombreProyecto = mejorCandidato.celda;
+      obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = mejorCandidato.celda;
+      debugLog(`     📝 Nombre del proyecto encontrado (búsqueda inteligente): "${mejorCandidato.celda.substring(0, 50)}..."`);
+    }
+  }
+  
+  // Si aún no se encontró y tenemos el HTML de la fila, buscar directamente en el HTML
+  if (!nombreProyecto && rowHtml) {
+    // Extraer texto de todas las celdas td que tengan width (típicamente contienen el nombre del proyecto)
+    const celdasConWidth = rowHtml.match(/<td[^>]*width[^>]*>([\s\S]*?)<\/td>/gi);
+    if (celdasConWidth) {
+      for (const celdaHtml of celdasConWidth) {
+        let texto = celdaHtml.replace(/<[^>]+>/g, '');
+        texto = decodeEntities(texto);
+        texto = texto.trim();
+        
+        if (texto.length > 20 && 
+            !texto.toUpperCase().includes('ESCUELA') &&
+            !texto.toUpperCase().includes('DPTO') &&
+            !texto.toUpperCase().includes('DEPARTAMENTO') &&
+            !texto.match(/^\d+\.?\d*$/)) {
+          nombreProyecto = texto;
+          obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = texto;
+          debugLog(`     📝 Nombre del proyecto encontrado en HTML (celda con width): "${texto.substring(0, 50)}..."`);
+          break;
+        }
+      }
+    }
+  }
+  
+  // Buscar horas si no se encontró
+  if (!horasSemestre) {
+    for (let ci = 0; ci < cells.length; ci++) {
+      const celda = cells[ci]?.trim() || '';
+      if (celda.match(/^\d+\.?\d*$/)) {
+        horasSemestre = celda;
+        obj['HORAS SEMESTRE'] = celda;
+        break;
+      }
+    }
+  }
+  
+  // Validar que tenga al menos horas o nombre
+  if (!horasSemestre && !nombreProyecto) {
+    return null;
+  }
+  
+  return obj;
+}
+
+/**
+ * Extrae el texto de una celda HTML, manejando divs y fonts anidados
+ * Similar a textContent en el navegador
+ */
+function extraerTextoDeCelda(celdaHtml: string): string {
+  // Remover todos los tags HTML y obtener solo el texto
+  let texto = celdaHtml.replace(/<[^>]+>/g, '');
+  texto = decodeEntities(texto);
+  texto = texto.replace(/\s+/g, ' ').trim();
+  return texto;
+}
+
+/**
  * Extrae celdas de una fila HTML, manejando colspan
  */
 function extractCells(rowHtml: string): string[] {
@@ -72,14 +227,8 @@ function extractCells(rowHtml: string): string[] {
     const colspanMatch = cellMatch.match(/colspan=["']?(\d+)["']?/i);
     const colspan = colspanMatch ? parseInt(colspanMatch[1], 10) : 1;
     
-    // Extraer el contenido de la celda
-    let cellContent = cellMatch.replace(/<\/?t[dh][^>]*>/gi, '');
-    cellContent = cellContent.replace(/<[^>]+>/g, '');
-    cellContent = cellContent.replace(/\s*\n\s*/g, ' ').trim();
-    cellContent = cellContent.replace(/:$/, '').trim(); // Quitar dos puntos al final
-    cellContent = decodeEntities(cellContent);
-    // IMPORTANTE: NO remover acentos aquí para preservar los headers originales
-    // cellContent = removeAccents(cellContent);
+    // Extraer el contenido de la celda usando la función especializada
+    const cellContent = extraerTextoDeCelda(cellMatch);
     
     // Agregar la celda tantas veces como indique colspan
     for (let i = 0; i < colspan; i++) {
@@ -484,6 +633,214 @@ function extraerCamposDesdeTextoPlano(html: string, informacionPersonal: Informa
 }
 
 /**
+ * Extrae datos personales de la tabla según la estructura HTML real
+ * Busca la tabla con estructura: fila 1 (headers), fila 2 (datos), fila 3 (headers), fila 4 (datos)
+ */
+function extraerDatosPersonalesDeHTML(html: string, informacionPersonal: InformacionPersonal): void {
+  debugLog(`\n🔍 Buscando tabla de datos personales...`);
+  
+  // Buscar todas las tablas que puedan contener datos personales
+  const tableMatches = html.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
+  if (!tableMatches) {
+    debugLog(`   ⚠️ No se encontraron tablas`);
+    return;
+  }
+  
+  // Buscar tabla que tenga la estructura de datos personales
+  // Debe tener al menos 4 filas y contener headers como CEDULA, VINCULACION, etc.
+  for (const tableHtml of tableMatches) {
+    const rowMatches = tableHtml.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+    if (!rowMatches || rowMatches.length < 4) continue;
+    
+    // Verificar si la primera fila tiene headers de datos personales
+    const primeraFila = rowMatches[0];
+    const primeraFilaTexto = extraerTextoDeCelda(primeraFila).toUpperCase();
+    
+    if (!primeraFilaTexto.includes('CEDULA') && !primeraFilaTexto.includes('APELLIDO')) {
+      continue;
+    }
+    
+    debugLog(`   ✅ Tabla de datos personales encontrada con ${rowMatches.length} filas`);
+    
+    // Extraer datos de la fila 2 (índice 1): CEDULA, APELLIDOS, NOMBRE, UNIDAD
+    const fila2Celdas = rowMatches[1].match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi);
+    if (fila2Celdas && fila2Celdas.length >= 5) {
+      const cedula = extraerTextoDeCelda(fila2Celdas[0]);
+      const apellido1 = extraerTextoDeCelda(fila2Celdas[1]);
+      const apellido2 = extraerTextoDeCelda(fila2Celdas[2]);
+      const nombre = extraerTextoDeCelda(fila2Celdas[3]);
+      const unidadAcademica = extraerTextoDeCelda(fila2Celdas[4]);
+      
+      if (cedula) {
+        informacionPersonal['CEDULA'] = cedula;
+        informacionPersonal['1 APELLIDO'] = apellido1;
+        informacionPersonal['2 APELLIDO'] = apellido2;
+        informacionPersonal['NOMBRE'] = nombre;
+        informacionPersonal['UNIDAD ACADEMICA'] = unidadAcademica;
+        
+        debugLog(`   ✓ Datos básicos: CEDULA=${cedula}, NOMBRE=${nombre}, APELLIDOS=${apellido1} ${apellido2}`);
+      }
+    }
+    
+    // Extraer datos de la fila 4 (índice 3): VINCULACION, CATEGORIA, DEDICACION, NIVEL, CENTRO COSTO
+    if (rowMatches.length >= 4) {
+      const fila4Celdas = rowMatches[3].match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi);
+      if (fila4Celdas && fila4Celdas.length >= 5) {
+        const vinculacion = extraerTextoDeCelda(fila4Celdas[0]);
+        const categoria = extraerTextoDeCelda(fila4Celdas[1]);
+        const dedicacion = extraerTextoDeCelda(fila4Celdas[2]);
+        const nivelAlcanzado = extraerTextoDeCelda(fila4Celdas[3]);
+        const centroCosto = extraerTextoDeCelda(fila4Celdas[4]);
+        
+        if (vinculacion) informacionPersonal['VINCULACION'] = vinculacion;
+        if (categoria) informacionPersonal['CATEGORIA'] = categoria;
+        if (dedicacion) informacionPersonal['DEDICACION'] = dedicacion;
+        if (nivelAlcanzado) informacionPersonal['NIVEL ALCANZADO'] = nivelAlcanzado;
+        if (centroCosto) informacionPersonal['CENTRO COSTO'] = centroCosto;
+        
+        debugLog(`   ✓ Datos laborales: VINCULACION=${vinculacion}, CATEGORIA=${categoria}, DEDICACION=${dedicacion}, NIVEL=${nivelAlcanzado}`);
+      }
+    }
+    
+    // Si encontramos esta tabla, no necesitamos buscar más
+    return;
+  }
+  
+  debugLog(`   ⚠️ No se encontró tabla de datos personales con la estructura esperada`);
+}
+
+/**
+ * Extrae actividades de investigación de tablas anidadas según la estructura HTML real
+ * Busca tablas que contengan "APROBADO POR" y "NOMBRE DEL ANTEPROYECTO"
+ */
+function extraerActividadesInvestigacionDeHTML(html: string): any[] {
+  debugLog(`\n🔍 Buscando actividades de investigación...`);
+  
+  const actividades: any[] = [];
+  
+  // Buscar todas las tablas
+  const tableMatches = html.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
+  if (!tableMatches) {
+    debugLog(`   ⚠️ No se encontraron tablas`);
+    return actividades;
+  }
+  
+  // Buscar tablas que puedan contener actividades de investigación
+  for (let tablaIdx = 0; tablaIdx < tableMatches.length; tablaIdx++) {
+    const tablaHtml = tableMatches[tablaIdx];
+    
+    // Verificar si esta tabla contiene indicadores de investigación
+    const tieneIndicadores = tablaHtml.includes('APROBADO POR') || 
+                             tablaHtml.includes('ANTEPROYECTO') ||
+                             tablaHtml.includes('PROPUESTA DE INVESTIGACION');
+    
+    if (!tieneIndicadores) continue;
+    
+    debugLog(`   ✅ Tabla ${tablaIdx + 1} tiene indicadores de investigación`);
+    
+    // Buscar tablas anidadas dentro de esta tabla
+    const tablasAnidadas = tablaHtml.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
+    const tablaAProcesar = tablasAnidadas && tablasAnidadas.length > 1 ? tablasAnidadas[tablasAnidadas.length - 1] : tablaHtml;
+    
+    const rowMatches = tablaAProcesar.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+    if (!rowMatches || rowMatches.length < 2) continue;
+    
+    // Buscar la fila de headers (típicamente tiene bgcolor)
+    let headerRowIndex = -1;
+    for (let i = 0; i < Math.min(3, rowMatches.length); i++) {
+      if (rowMatches[i].match(/bgcolor/i) || rowMatches[i].match(/background/i)) {
+        headerRowIndex = i;
+        break;
+      }
+    }
+    
+    if (headerRowIndex === -1) headerRowIndex = 0;
+    
+    debugLog(`   📋 Fila de headers encontrada en índice ${headerRowIndex}`);
+    
+    // Procesar filas de datos (después de la fila de headers)
+    for (let ri = headerRowIndex + 1; ri < rowMatches.length; ri++) {
+      const row = rowMatches[ri];
+      const celdas = row.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi);
+      
+      if (!celdas || celdas.length < 2) continue;
+      
+      // Extraer texto de cada celda
+      const textos = celdas.map(c => extraerTextoDeCelda(c));
+      
+      // Saltar filas vacías
+      if (textos.every(t => !t || t.trim() === '' || t === '–' || t === '-')) continue;
+      
+      // Según la estructura HTML real:
+      // - Primera celda puede tener colspan="2" y contiene "Escuela o Dpto" (aprobado por)
+      // - Segunda celda (o tercera si hay colspan) contiene el nombre del proyecto
+      // - Última celda contiene las horas
+      let aprobadoPor = '';
+      let nombreProyecto = '';
+      let horasSemestre = '';
+      
+      // Buscar aprobado por: texto corto que no sea el nombre del proyecto
+      // Típicamente está en las primeras celdas y es corto (< 30 caracteres)
+      for (let i = 0; i < Math.min(3, textos.length); i++) {
+        const texto = textos[i]?.trim() || '';
+        if (texto && texto.length > 0 && texto.length < 30 && 
+            !texto.toUpperCase().includes('APROBADO') &&
+            !texto.toUpperCase().includes('NOMBRE') &&
+            !texto.toUpperCase().includes('ANTEPROYECTO') &&
+            !texto.toUpperCase().includes('PROPUESTA') &&
+            !texto.match(/^\d+\.?\d*$/)) {
+          aprobadoPor = texto;
+          break;
+        }
+      }
+      
+      // Buscar nombre del proyecto: celda más larga (> 20 caracteres) que no sea horas ni aprobado
+      let mejorCandidato = { texto: '', indice: -1, longitud: 0 };
+      for (let i = 0; i < textos.length; i++) {
+        const texto = textos[i]?.trim() || '';
+        if (texto.length > mejorCandidato.longitud &&
+            texto.length > 20 && 
+            !texto.toUpperCase().includes('APROBADO') &&
+            !texto.toUpperCase().includes('ESCUELA') &&
+            !texto.toUpperCase().includes('DPTO') &&
+            !texto.toUpperCase().includes('DEPARTAMENTO') &&
+            !texto.match(/^\d+\.?\d*$/)) {
+          mejorCandidato = { texto, indice: i, longitud: texto.length };
+        }
+      }
+      
+      if (mejorCandidato.texto) {
+        nombreProyecto = mejorCandidato.texto;
+      }
+      
+      // Buscar horas: número con decimales, típicamente en la última celda
+      for (let i = textos.length - 1; i >= 0; i--) {
+        const texto = textos[i]?.trim() || '';
+        if (texto.match(/^\d+\.?\d*$/)) {
+          horasSemestre = texto;
+          break;
+        }
+      }
+      
+      // Validar que tenga al menos nombre o horas
+      if (!nombreProyecto && !horasSemestre) continue;
+      
+      const actividad = {
+        'APROBADO POR': aprobadoPor || '',
+        'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION': nombreProyecto || '',
+        'HORAS SEMESTRE': horasSemestre || '',
+      };
+      
+      actividades.push(actividad);
+      debugLog(`   ✓ Actividad extraída: "${nombreProyecto.substring(0, 50)}..." (${horasSemestre} horas)`);
+    }
+  }
+  
+  debugLog(`   📊 Total actividades de investigación encontradas: ${actividades.length}`);
+  return actividades;
+}
+
+/**
  * Procesa el HTML extraído y devuelve datos estructurados
  */
 export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
@@ -499,14 +856,21 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
 
   const informacionPersonal: InformacionPersonal = {};
   
-  // IMPORTANTE: Buscar campos en texto plano primero (formato CAMPO=valor)
+  // IMPORTANTE: Primero extraer datos personales usando la estructura HTML real
+  extraerDatosPersonalesDeHTML(html, informacionPersonal);
+  
+  // IMPORTANTE: También buscar campos en texto plano como fallback (formato CAMPO=valor)
   extraerCamposDesdeTextoPlano(html, informacionPersonal);
+  
   const actividadesDocencia: ActividadesDocencia = {
     pregrado: [],
     postgrado: [],
     direccionTesis: [],
   };
-  const actividadesInvestigacion: any[] = [];
+  
+  // IMPORTANTE: Primero extraer actividades de investigación usando la estructura HTML real
+  const actividadesInvestigacion = extraerActividadesInvestigacionDeHTML(html);
+  
   const actividadesExtension: any[] = [];
   const actividadesIntelectualesOArtisticas: any[] = [];
   const actividadesAdministrativas: any[] = [];
@@ -1165,11 +1529,58 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
     !headersNorm.some((h) => h.includes('TESIS')) &&
     !(tieneAprobadoSolo && tieneTipo); // Excluir actividades intelectuales que tienen "APROBADO" + "TIPO"
 
-    if (esTablaInvestigacion) {
-      debugLog(`✅ Tabla ${contadorTablas} detectada como ACTIVIDADES DE INVESTIGACION`);
+    // Solo procesar si no se encontraron actividades con la función especializada
+    // o si esta tabla tiene una estructura diferente que no fue capturada
+    if (esTablaInvestigacion && actividadesInvestigacion.length === 0) {
+      debugLog(`✅ Tabla ${contadorTablas} detectada como ACTIVIDADES DE INVESTIGACION (procesamiento genérico)`);
       debugLog(`   Headers: ${headers.join(', ')}`);
       debugLog(`   Criterios: tieneAnteproyecto=${tieneAnteproyecto}, tienePropuesta=${tienePropuestaInvestigacion}, tieneProyecto=${tieneProyectoInvestigacion}, tieneAprobadoPor=${tieneAprobadoPor}`);
       
+      // NUEVA ESTRATEGIA: Buscar tablas anidadas dentro de esta tabla
+      const tablasAnidadas = tableHtml.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
+      if (tablasAnidadas && tablasAnidadas.length > 1) {
+        debugLog(`   🔍 Detectadas ${tablasAnidadas.length} tablas anidadas, procesando cada una...`);
+        
+        tablasAnidadas.forEach((tablaAnidada, idxTabla) => {
+          const filasAnidadas = tablaAnidada.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+          if (!filasAnidadas || filasAnidadas.length < 2) return;
+          
+          // Buscar fila de headers en la tabla anidada
+          let headersAnidados: string[] = [];
+          let headerRowIndexAnidado = 0;
+          
+          for (let i = 0; i < Math.min(3, filasAnidadas.length); i++) {
+            const fila = filasAnidadas[i];
+            if (fila.match(/bgcolor/i) || fila.match(/background/i)) {
+              headersAnidados = extractCells(fila);
+              headerRowIndexAnidado = i;
+              debugLog(`     📋 Headers anidados encontrados en fila ${i}:`, headersAnidados);
+              break;
+            }
+          }
+          
+          if (headersAnidados.length === 0) {
+            headersAnidados = extractCells(filasAnidadas[0]);
+            debugLog(`     📋 Headers anidados (primera fila):`, headersAnidados);
+          }
+          
+          // Procesar filas de datos en la tabla anidada
+          for (let ri = headerRowIndexAnidado + 1; ri < filasAnidadas.length; ri++) {
+            const row = filasAnidadas[ri];
+            const cells = extractCells(row);
+            
+            if (cells.every((c) => c === '' || c.trim() === '')) continue;
+            
+            const obj = extraerActividadInvestigacionDeFila(cells, headersAnidados, headers, row);
+            if (obj && (obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] || obj['HORAS SEMESTRE'])) {
+              actividadesInvestigacion.push(obj);
+              debugLog(`     ✓ Actividad de investigación extraída de tabla anidada ${idxTabla + 1}`);
+            }
+          }
+        });
+      }
+      
+      // ESTRATEGIA ORIGINAL: Procesar filas de la tabla principal
       // IMPORTANTE: Empezar desde headerRowIndex + 1 para saltar la fila de headers
       for (let ri = headerRowIndex + 1; ri < rowMatches.length; ri++) {
         const row = rowMatches[ri];
@@ -1183,193 +1594,15 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
           continue;
         }
         
-        // Validar que la fila tenga datos relevantes (más flexible)
-        // Buscar en cualquier celda que tenga contenido (no solo en headers específicos)
-        const tieneDatos = cells.some((c, idx) => {
-          const celda = c && c.trim();
-          if (!celda) return false;
-          
-          // Si la celda tiene contenido, verificar que no sea solo "Escuela o Dpto" repetido
-          const header = headers[idx] || '';
-          const headerUpper = header.toUpperCase();
-          
-          // Si es una celda con contenido y no es solo un header repetido o "Escuela o Dpto"
-          if (celda.length > 3 && 
-              !celda.toUpperCase().includes('ESCUELA') && 
-              !celda.toUpperCase().includes('DPTO') &&
-              !celda.toUpperCase().includes('DEPARTAMENTO')) {
-            return true;
-          }
-          
-          // O si está en una columna con header relevante
-          return (headerUpper.includes('PROYECTO') || 
-                  headerUpper.includes('ANTEPROYECTO') ||
-                  headerUpper.includes('PROPUESTA') ||
-                  headerUpper.includes('INVESTIGACION') ||
-                  headerUpper.includes('NOMBRE') ||
-                  headerUpper.includes('CODIGO') ||
-                  headerUpper.includes('HORAS'));
-        });
+        // Usar la función especializada para extraer la actividad (pasar el HTML de la fila)
+        const obj = extraerActividadInvestigacionDeFila(cells, headers, headers, row);
         
-        if (!tieneDatos) {
-          debugLog(`   ⚠️ Fila ${ri} sin datos relevantes, omitiendo: ${cells.join(' | ')}`);
-          continue;
+        if (obj && (obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] || obj['HORAS SEMESTRE'])) {
+          actividadesInvestigacion.push(obj);
+          debugLog(`   ✓ Agregada actividad de investigación: "${obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] || 'Sin nombre'}" (${obj['HORAS SEMESTRE'] || '0'} horas)`);
+        } else {
+          debugLog(`   ⚠️ Fila ${ri} no contiene datos válidos de investigación, omitiendo`);
         }
-        
-        // Extraer datos de la fila
-        const obj: Record<string, any> = {};
-        let nombreProyecto = '';
-        let aprobadoPor = '';
-        let escuelaDpto = '';
-        
-        debugLog(`   📊 Mapeando ${cells.length} celdas con ${headers.length} headers`);
-        debugLog(`   📊 Headers:`, headers);
-        debugLog(`   📊 Celdas:`, cells);
-        
-        // IMPORTANTE: Mapear todos los headers correctamente
-        headers.forEach((header, ci) => {
-          const valor = cells[ci] || '';
-          const headerUpper = header.toUpperCase().trim();
-          
-          // Guardar el valor con el header original
-          obj[header] = valor.trim();
-          
-          debugLog(`     [${ci}] Header: "${header}" = "${valor.trim()}"`);
-          
-          // Extraer APROBADO POR
-          if (headerUpper.includes('APROBADO') && headerUpper.includes('POR')) {
-            aprobadoPor = valor.trim();
-            obj['APROBADO POR'] = valor.trim();
-            debugLog(`       ✓ APROBADO POR encontrado: "${aprobadoPor}"`);
-          }
-          
-          // Extraer nombre del proyecto/anteproyecto - buscar en múltiples variaciones
-          if (headerUpper.includes('NOMBRE') && 
-              (headerUpper.includes('PROYECTO') || 
-               headerUpper.includes('ANTEPROYECTO') || 
-               headerUpper.includes('PROPUESTA') ||
-               headerUpper.includes('INVESTIGACION'))) {
-            if (valor.trim() && valor.trim() !== '–' && valor.trim() !== '-') {
-              nombreProyecto = valor.trim();
-              obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = valor.trim();
-              debugLog(`       ✓ Nombre del proyecto encontrado en header: "${nombreProyecto.substring(0, 50)}..."`);
-            }
-          }
-          
-          // También buscar si el header es solo "NOMBRE DEL PROYECTO DE INVESTIGACION" o variaciones
-          if ((headerUpper.includes('NOMBRE') && headerUpper.includes('PROYECTO') && headerUpper.includes('INVESTIGACION')) ||
-              (headerUpper.includes('NOMBRE') && headerUpper.includes('ANTEPROYECTO')) ||
-              (headerUpper.includes('NOMBRE') && headerUpper.includes('PROPUESTA'))) {
-            if (!nombreProyecto && valor.trim() && valor.trim() !== '–' && valor.trim() !== '-') {
-              nombreProyecto = valor.trim();
-              obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = valor.trim();
-              debugLog(`       ✓ Nombre del proyecto encontrado (variación): "${nombreProyecto.substring(0, 50)}..."`);
-            }
-          }
-          
-          // Extraer Escuela o Dpto
-          if (headerUpper.includes('ESCUELA') || 
-              headerUpper.includes('DPTO') || 
-              headerUpper.includes('DEPARTAMENTO')) {
-            escuelaDpto = valor.trim();
-            obj['Escuela o Dpto'] = valor.trim();
-            debugLog(`       ✓ Escuela o Dpto encontrado: "${escuelaDpto}"`);
-          }
-          
-          // Normalizar HORAS SEMESTRE
-          if ((headerUpper.includes('HORAS') && headerUpper.includes('SEMESTRE')) ||
-              headerUpper === 'HORAS SEMESTRE' ||
-              (headerUpper.includes('HORAS') && !headerUpper.includes('TOTAL')) ||
-              headerUpper === 'HORAS') {
-            obj['HORAS SEMESTRE'] = valor.trim();
-            debugLog(`       ✓ HORAS SEMESTRE encontrado: "${obj['HORAS SEMESTRE']}"`);
-          }
-        });
-        
-        // Si no se encontró nombre en el header específico, buscar en cualquier celda con contenido significativo
-        // IMPORTANTE: Buscar en celdas que NO sean headers conocidos y que tengan contenido largo
-        if (!nombreProyecto) {
-          // Primero, buscar en celdas que tengan headers relacionados con nombre/proyecto/investigación
-          for (let ci = 0; ci < cells.length; ci++) {
-            const celda = cells[ci]?.trim() || '';
-            const header = headers[ci] || '';
-            const headerUpper = header.toUpperCase();
-            
-            // Si el header menciona nombre, proyecto, investigación, o anteproyecto, y la celda tiene contenido
-            if ((headerUpper.includes('NOMBRE') || 
-                 headerUpper.includes('PROYECTO') || 
-                 headerUpper.includes('INVESTIGACION') ||
-                 headerUpper.includes('ANTEPROYECTO') ||
-                 headerUpper.includes('PROPUESTA')) &&
-                celda.length > 5 &&
-                celda !== '–' &&
-                celda !== '-' &&
-                !celda.match(/^[\s\-–]+$/)) {
-              nombreProyecto = celda;
-              obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = celda;
-              debugLog(`   📝 Nombre del proyecto encontrado en celda ${ci} (header: "${header}"): "${celda}"`);
-              break;
-            }
-          }
-          
-          // Si aún no se encontró, buscar en cualquier celda con contenido largo (fallback)
-          // IMPORTANTE: Buscar la celda más larga que no sea un header conocido
-          if (!nombreProyecto) {
-            let mejorCandidato = { celda: '', indice: -1, longitud: 0 };
-            
-            for (let ci = 0; ci < cells.length; ci++) {
-              const celda = cells[ci]?.trim() || '';
-              const header = headers[ci] || '';
-              const headerUpper = header.toUpperCase();
-              const celdaUpper = celda.toUpperCase();
-              
-              // Excluir: horas, aprobado, escuela, dpto, código vacío, guiones, números solos, headers conocidos
-              const esHeaderConocido = 
-                headerUpper.includes('HORAS') ||
-                headerUpper.includes('APROBADO') ||
-                headerUpper.includes('ESCUELA') ||
-                headerUpper.includes('DPTO') ||
-                headerUpper.includes('DEPARTAMENTO') ||
-                headerUpper.includes('CODIGO') ||
-                celdaUpper.includes('ESCUELA') ||
-                celdaUpper.includes('DPTO') ||
-                celdaUpper.includes('DEPARTAMENTO') ||
-                celda === '–' ||
-                celda === '-' ||
-                celda.match(/^[\s\-–]+$/) ||
-                celda.match(/^\d+\.?\d*$/) || // No es solo un número
-                celda.length < 10; // Muy corto para ser un nombre de proyecto
-              
-              if (!esHeaderConocido && celda.length > mejorCandidato.longitud) {
-                mejorCandidato = { celda, indice: ci, longitud: celda.length };
-              }
-            }
-            
-            if (mejorCandidato.celda && mejorCandidato.longitud > 15) {
-              nombreProyecto = mejorCandidato.celda;
-              obj['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = mejorCandidato.celda;
-              debugLog(`   📝 Nombre del proyecto encontrado en celda ${mejorCandidato.indice} (header: "${headers[mejorCandidato.indice] || 'N/A'}") - búsqueda fallback: "${mejorCandidato.celda.substring(0, 50)}..."`);
-            }
-          }
-        }
-        
-        // Validar que tenga al menos horas o nombre
-        if (!obj['HORAS SEMESTRE'] && !nombreProyecto) {
-          debugLog(`   ⚠️ Fila ${ri} sin horas ni nombre de proyecto, omitiendo: ${cells.join(' | ')}`);
-          continue;
-        }
-        
-        // Log detallado de lo que se está extrayendo
-        debugLog(`   📋 Fila ${ri} extraída:`, {
-          'APROBADO POR': aprobadoPor || 'N/A',
-          'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION': nombreProyecto || 'N/A',
-          'HORAS SEMESTRE': obj['HORAS SEMESTRE'] || 'N/A',
-          'Escuela o Dpto': escuelaDpto || 'N/A',
-          'Celdas originales': cells
-        });
-        
-        actividadesInvestigacion.push(obj);
-        debugLog(`   ✓ Agregada actividad de investigación: "${nombreProyecto || 'Sin nombre'}" (${obj['HORAS SEMESTRE'] || '0'} horas)`);
       }
       debugLog(`   Total actividades de investigación en esta tabla: ${actividadesInvestigacion.length}`);
     }
@@ -1587,4 +1820,5 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
     },
   ];
 }
+
 
