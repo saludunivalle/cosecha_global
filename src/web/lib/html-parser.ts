@@ -710,11 +710,11 @@ function extraerDatosPersonalesDeHTML(html: string, informacionPersonal: Informa
 }
 
 /**
- * Extrae actividades de investigación de tablas anidadas según la estructura HTML real
- * Busca tablas que contengan "APROBADO POR" y "NOMBRE DEL ANTEPROYECTO"
+ * Extrae actividades intelectuales de tablas anidadas según la estructura HTML real
+ * Adaptado del enfoque de Puppeteer pero trabajando con HTML como string
  */
-function extraerActividadesInvestigacionDeHTML(html: string): any[] {
-  debugLog(`\n🔍 Buscando actividades de investigación...`);
+function extraerActividadesIntelectualesDeHTML(html: string): any[] {
+  debugLog(`\n🔍 Buscando actividades intelectuales...`);
   
   const actividades: any[] = [];
   
@@ -725,118 +725,512 @@ function extraerActividadesInvestigacionDeHTML(html: string): any[] {
     return actividades;
   }
   
-  // Buscar tablas que puedan contener actividades de investigación
-  for (let tablaIdx = 0; tablaIdx < tableMatches.length; tablaIdx++) {
-    const tablaHtml = tableMatches[tablaIdx];
+  // Buscar la tabla que contiene "ACTIVIDADES INTELECTUALES" o "ACTIVIDADES ARTISTICAS"
+  // Y verificar que tenga la columna "APROBADO POR"
+  let tablaContenedora: string | null = null;
+  
+  for (let i = 0; i < tableMatches.length; i++) {
+    const tablaHtml = tableMatches[i];
+    const texto = extraerTextoDeCelda(tablaHtml);
+    const textoUpper = texto.toUpperCase();
     
-    // Verificar si esta tabla contiene indicadores de investigación
-    const tieneIndicadores = tablaHtml.includes('APROBADO POR') || 
-                             tablaHtml.includes('ANTEPROYECTO') ||
-                             tablaHtml.includes('PROPUESTA DE INVESTIGACION');
+    const tieneTitulo = textoUpper.includes('ACTIVIDADES INTELECTUALES') || 
+                        textoUpper.includes('ACTIVIDADES ARTISTICAS') ||
+                        textoUpper.includes('ARTÍSTICAS');
     
-    if (!tieneIndicadores) continue;
+    if (!tieneTitulo) continue;
     
-    debugLog(`   ✅ Tabla ${tablaIdx + 1} tiene indicadores de investigación`);
+    // Verificar que tenga la columna "APROBADO POR"
+    const tieneColumnas = textoUpper.includes('APROBADO POR');
     
-    // Buscar tablas anidadas dentro de esta tabla
-    const tablasAnidadas = tablaHtml.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
-    const tablaAProcesar = tablasAnidadas && tablasAnidadas.length > 1 ? tablasAnidadas[tablasAnidadas.length - 1] : tablaHtml;
+    if (tieneColumnas) {
+      tablaContenedora = tablaHtml;
+      debugLog(`   ✅ Tabla de intelectuales encontrada (índice ${i + 1})`);
+      break;
+    }
+  }
+  
+  if (!tablaContenedora) {
+    debugLog(`   ❌ No se encontró tabla de ACTIVIDADES INTELECTUALES`);
+    return actividades;
+  }
+  
+  // Buscar tabla interna anidada
+  let tablaInterna: string | null = null;
+  const tablaAnidadaMatch = tablaContenedora.match(/<tbody[^>]*>[\s\S]*?<tr[^>]*>[\s\S]*?<td[^>]*>[\s\S]*?(<table[^>]*>[\s\S]*?<\/table>)/i);
+  if (tablaAnidadaMatch && tablaAnidadaMatch[1]) {
+    tablaInterna = tablaAnidadaMatch[1];
+    debugLog(`   ✅ Tabla interna anidada encontrada`);
+  } else {
+    tablaInterna = tablaContenedora;
+    debugLog(`   ℹ️ Usando tabla contenedora como tabla de datos`);
+  }
+  
+  // Extraer filas
+  const filas = tablaInterna.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+  if (!filas || filas.length < 2) {
+    debugLog(`   ⚠️ No se encontraron suficientes filas`);
+    return actividades;
+  }
+  
+  // Encontrar fila de encabezados buscando "APROBADO POR"
+  let indiceEncabezado = -1;
+  for (let i = 0; i < Math.min(10, filas.length); i++) {
+    const filaTexto = extraerTextoDeCelda(filas[i]);
+    const filaTextoUpper = filaTexto.toUpperCase();
     
-    const rowMatches = tablaAProcesar.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
-    if (!rowMatches || rowMatches.length < 2) continue;
+    if (filaTextoUpper.includes('APROBADO POR')) {
+      indiceEncabezado = i;
+      debugLog(`   ✅ Encabezado encontrado en fila ${i + 1}`);
+      break;
+    }
+  }
+  
+  if (indiceEncabezado === -1) {
+    debugLog(`   ❌ No se encontró encabezado con "APROBADO POR"`);
+    return actividades;
+  }
+  
+  // Determinar estructura de columnas del encabezado
+  const filaEncabezado = filas[indiceEncabezado];
+  const celdasEncabezado = filaEncabezado.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi);
+  const nombresColumnas: string[] = [];
+  
+  if (celdasEncabezado) {
+    nombresColumnas.push(...celdasEncabezado.map(c => extraerTextoDeCelda(c).trim()));
+    debugLog(`   📋 Columnas detectadas: ${JSON.stringify(nombresColumnas)}`);
+  }
+  
+  // Procesar filas de datos
+  const filasConDatos = filas.slice(indiceEncabezado + 1);
+  
+  for (let idx = 0; idx < filasConDatos.length; idx++) {
+    const fila = filasConDatos[idx];
+    const celdas = fila.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi);
     
-    // Buscar la fila de headers (típicamente tiene bgcolor)
-    let headerRowIndex = -1;
-    for (let i = 0; i < Math.min(3, rowMatches.length); i++) {
-      if (rowMatches[i].match(/bgcolor/i) || rowMatches[i].match(/background/i)) {
-        headerRowIndex = i;
+    if (!celdas || celdas.length < 2) continue;
+    
+    const textos = celdas.map(c => extraerTextoDeCelda(c));
+    
+    // Mapear dinámicamente según las columnas encontradas
+    const dato: Record<string, string> = {};
+    
+    textos.forEach((texto, idx) => {
+      const nombreColumna = nombresColumnas[idx];
+      const valor = texto.trim();
+      
+      if (nombreColumna) {
+        // Normalizar nombre de columna para usar como key
+        const key = nombreColumna
+          .toLowerCase()
+          .replace(/\s+/g, '_')
+          .replace(/[áàäâ]/g, 'a')
+          .replace(/[éèëê]/g, 'e')
+          .replace(/[íìïî]/g, 'i')
+          .replace(/[óòöô]/g, 'o')
+          .replace(/[úùüû]/g, 'u');
+        
+        dato[key] = valor;
+      }
+    });
+    
+    // Asegurar campos mínimos
+    const actividad = {
+      'APROBADO POR': dato.aprobado_por || dato.aprobadopor || 'No especificado',
+      'TITULO': dato.titulo || dato.nombre || '',
+      'TIPO': dato.tipo || '',
+      'DESCRIPCION': dato.descripcion || dato.observaciones || '',
+      ...dato // mantener todos los campos extras
+    };
+    
+    // Filtrar filas completamente vacías
+    if (Object.keys(actividad).length <= 1 || (!actividad['TITULO'] && !actividad['TIPO'])) {
+      continue;
+    }
+    
+    actividades.push(actividad);
+    debugLog(`   ✓ Actividad intelectual extraída: "${actividad['TITULO'].substring(0, 50)}..." (APROBADO POR: ${actividad['APROBADO POR']})`);
+  }
+  
+  debugLog(`   ✅ Total actividades intelectuales extraídas: ${actividades.length}`);
+  return actividades;
+}
+
+/**
+ * Detecta si hay selectores de período en el HTML
+ */
+function detectarSelectoresPeriodo(html: string): { tieneSelector: boolean; detalles: string } {
+  // Buscar <select> que pueda ser selector de período
+  const selectMatches = html.match(/<select[^>]*>[\s\S]*?<\/select>/gi);
+  if (selectMatches) {
+    for (const select of selectMatches) {
+      const selectTexto = extraerTextoDeCelda(select);
+      const selectUpper = selectTexto.toUpperCase();
+      if (selectUpper.includes('PERIODO') || 
+          selectUpper.includes('SEMESTRE') ||
+          selectUpper.match(/\d{4}[-\s]?\d{1,2}/)) {
+        debugLog(`   📅 Selector de período detectado en HTML`);
+        return { tieneSelector: true, detalles: 'Select encontrado' };
+      }
+    }
+  }
+  
+  // Buscar radio buttons de período
+  if (html.match(/<input[^>]*type=["']radio["'][^>]*>/gi)) {
+    const radioMatches = html.match(/<input[^>]*type=["']radio["'][^>]*>/gi);
+    if (radioMatches && radioMatches.length > 0) {
+      debugLog(`   📅 Radio buttons detectados (posible selector de período)`);
+      return { tieneSelector: true, detalles: 'Radio buttons encontrados' };
+    }
+  }
+  
+  return { tieneSelector: false, detalles: 'No se encontraron selectores' };
+}
+
+/**
+ * Extrae el período asociado a una tabla buscando en el contexto HTML cercano
+ */
+function extraerPeriodoDeContexto(html: string, tablaHtml: string, tablaIndex: number): string {
+  // Buscar el índice de la tabla en el HTML completo
+  const tablaPosicion = html.indexOf(tablaHtml);
+  if (tablaPosicion === -1) return 'DESCONOCIDO';
+  
+  // Buscar en un rango de 2000 caracteres antes de la tabla
+  const inicioBusqueda = Math.max(0, tablaPosicion - 2000);
+  const contextoAnterior = html.substring(inicioBusqueda, tablaPosicion);
+  
+  // Buscar patrones de período: "2024-1", "2024 - 1", "semestre 1", "periodo 2024", etc.
+  const patronesPeriodo = [
+    /\d{4}[-\s]?\d{1,2}/g,  // 2024-1, 2024 1, 20241
+    /semestre\s*\d+/gi,      // semestre 1, SEMESTRE 2
+    /periodo\s*\d{4}/gi,     // periodo 2024
+    /\d{4}\s*[-\s]\s*0?([12])/g, // 2024 - 1, 2024-01
+  ];
+  
+  for (const patron of patronesPeriodo) {
+    const matches = contextoAnterior.match(patron);
+    if (matches && matches.length > 0) {
+      // Tomar el último match (más cercano a la tabla)
+      const periodo = matches[matches.length - 1].trim();
+      debugLog(`     📅 Período detectado cerca de tabla ${tablaIndex + 1}: "${periodo}"`);
+      return periodo;
+    }
+  }
+  
+  return 'DESCONOCIDO';
+}
+
+/**
+ * Extrae actividades de investigación de tablas anidadas según la estructura HTML real
+ * Adaptado del enfoque de Puppeteer pero trabajando con HTML como string
+ * MEJORADO: Busca TODAS las tablas de investigación, no solo la primera
+ */
+function extraerActividadesInvestigacionDeHTML(html: string, idPeriod?: number): any[] {
+  debugLog(`\n🔍 Buscando actividades de investigación${idPeriod ? ` para período ${idPeriod}` : ''}...`);
+  
+  const actividades: any[] = [];
+  
+  // Detectar si hay selectores de período en el HTML
+  const infoSelectores = detectarSelectoresPeriodo(html);
+  if (infoSelectores.tieneSelector) {
+    debugLog(`   ℹ️ ${infoSelectores.detalles} - puede haber múltiples períodos`);
+  }
+  
+  // Logging específico para períodos problemáticos
+  if (idPeriod) {
+    const periodosProblematicos = [/* 2023-2, 2024-1, 2024-2, 2025-1, 2025-2, 2026-1 y adelante */];
+    // Nota: Los idPeriod son números, no strings como "2023-2"
+    // Pero podemos verificar si es un período reciente
+    debugLog(`   📅 Procesando período ID: ${idPeriod}`);
+  }
+  
+  // Buscar todas las tablas
+  const tableMatches = html.match(/<table[^>]*>[\s\S]*?<\/table>/gi);
+  if (!tableMatches) {
+    debugLog(`   ⚠️ No se encontraron tablas`);
+    return actividades;
+  }
+  
+  debugLog(`   📊 Total de tablas encontradas: ${tableMatches.length}`);
+  
+  // Buscar tablas por contenido específico, no por índice
+  // Verificar que contenga el título Y las columnas específicas
+  const tablasInvestigacion: Array<{ tabla: string; indice: number; periodo: string }> = [];
+  
+  for (let i = 0; i < tableMatches.length; i++) {
+    const tablaHtml = tableMatches[i];
+    const texto = extraerTextoDeCelda(tablaHtml);
+    const textoUpper = texto.toUpperCase();
+    
+    // Verificar que contenga el título
+    const tieneTitulo = textoUpper.includes('ACTIVIDADES DE INVESTIGACION') || 
+                        textoUpper.includes('ACTIVIDADES DE INVESTIGACIÓN');
+    
+    if (!tieneTitulo) continue;
+    
+    // Verificar que tenga las columnas específicas
+    // Puede tener "CODIGO" o "APROBADO POR", y debe tener "NOMBRE DEL PROYECTO" o "NOMBRE DEL ANTEPROYECTO"
+    const tieneColumnasCodigo = textoUpper.includes('CODIGO') && 
+                                 (textoUpper.includes('NOMBRE DEL PROYECTO') || 
+                                  textoUpper.includes('NOMBRE DEL ANTEPROYECTO')) &&
+                                 textoUpper.includes('HORAS SEMESTRE');
+    
+    // O puede tener "APROBADO POR" en lugar de "CODIGO"
+    const tieneColumnasAprobado = textoUpper.includes('APROBADO POR') && 
+                                   (textoUpper.includes('NOMBRE DEL PROYECTO') || 
+                                    textoUpper.includes('NOMBRE DEL ANTEPROYECTO') ||
+                                    textoUpper.includes('ANTEPROYECTO') ||
+                                    textoUpper.includes('PROPUESTA DE INVESTIGACION')) &&
+                                   textoUpper.includes('HORAS SEMESTRE');
+    
+    if (tieneColumnasCodigo || tieneColumnasAprobado) {
+      const periodo = extraerPeriodoDeContexto(html, tablaHtml, i);
+      tablasInvestigacion.push({ tabla: tablaHtml, indice: i, periodo });
+      debugLog(`   ✅ Tabla de investigación encontrada (índice ${i + 1}, período: ${periodo})`);
+      debugLog(`      📋 Columnas detectadas: ${tieneColumnasCodigo ? 'CODIGO' : 'APROBADO POR'}, NOMBRE DEL PROYECTO/ANTEPROYECTO, HORAS SEMESTRE`);
+    }
+  }
+  
+  if (tablasInvestigacion.length === 0) {
+    debugLog(`   ❌ No se encontró ninguna tabla de ACTIVIDADES DE INVESTIGACION`);
+    return actividades;
+  }
+  
+  debugLog(`   📊 Total de tablas de investigación encontradas: ${tablasInvestigacion.length}`);
+  
+  // Procesar CADA tabla de investigación encontrada
+  for (let tablaIdx = 0; tablaIdx < tablasInvestigacion.length; tablaIdx++) {
+    const { tabla: tablaContenedora, indice, periodo } = tablasInvestigacion[tablaIdx];
+    debugLog(`\n   🔍 Procesando tabla ${tablaIdx + 1}/${tablasInvestigacion.length} (índice ${indice + 1}, período: ${periodo})...`);
+  
+    // Buscar tabla interna (puede estar anidada)
+    // Estructura: tabla_contenedora > tbody > tr > td > tabla_interna
+    let tablaInterna: string | null = null;
+    
+    // Buscar tabla anidada dentro de tbody > tr > td > table
+    const tablaAnidadaMatch = tablaContenedora.match(/<tbody[^>]*>[\s\S]*?<tr[^>]*>[\s\S]*?<td[^>]*>[\s\S]*?(<table[^>]*>[\s\S]*?<\/table>)/i);
+    if (tablaAnidadaMatch && tablaAnidadaMatch[1]) {
+      tablaInterna = tablaAnidadaMatch[1];
+      debugLog(`     ✅ Tabla interna anidada encontrada`);
+    } else {
+      // Si no hay tabla interna, la contenedora ES la tabla de datos
+      tablaInterna = tablaContenedora;
+      debugLog(`     ℹ️ Usando tabla contenedora como tabla de datos`);
+    }
+    
+    // Extraer filas de la tabla interna
+    const filas = tablaInterna.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+    if (!filas || filas.length < 2) {
+      debugLog(`     ⚠️ No se encontraron suficientes filas en la tabla interna`);
+      continue; // Continuar con la siguiente tabla
+    }
+    
+    debugLog(`     📊 Total de filas en tabla interna: ${filas.length}`);
+    
+    // Encontrar la fila de encabezados buscando por contenido específico
+    // Buscar fila que contenga "CODIGO" o "APROBADO POR" Y las otras columnas
+    let indiceEncabezado = -1;
+    
+    for (let i = 0; i < Math.min(10, filas.length); i++) {
+      const filaTexto = extraerTextoDeCelda(filas[i]);
+      const filaTextoUpper = filaTexto.toUpperCase();
+      
+      // Verificar si tiene CODIGO (estructura nueva)
+      const tieneCodigo = filaTextoUpper.includes('CODIGO');
+      const tieneNombreProyecto = filaTextoUpper.includes('NOMBRE DEL PROYECTO') || 
+                                  filaTextoUpper.includes('NOMBRE DEL ANTEPROYECTO');
+      const tieneHoras = filaTextoUpper.includes('HORAS SEMESTRE');
+      
+      // Verificar si tiene APROBADO POR (estructura antigua)
+      const tieneAprobadoPor = filaTextoUpper.includes('APROBADO POR');
+      
+      // Si tiene CODIGO + NOMBRE + HORAS, es el encabezado
+      if (tieneCodigo && tieneNombreProyecto && tieneHoras) {
+        indiceEncabezado = i;
+        debugLog(`     ✅ Encabezado encontrado en fila ${i + 1} (con CODIGO)`);
+        break;
+      }
+      
+      // Si tiene APROBADO POR + NOMBRE + HORAS, también es encabezado
+      if (tieneAprobadoPor && tieneNombreProyecto && tieneHoras) {
+        indiceEncabezado = i;
+        debugLog(`     ✅ Encabezado encontrado en fila ${i + 1} (con APROBADO POR)`);
         break;
       }
     }
     
-    if (headerRowIndex === -1) headerRowIndex = 0;
+    if (indiceEncabezado === -1) {
+      debugLog(`     ❌ No se encontró fila de encabezados con las columnas esperadas`);
+      debugLog(`     🔍 Revisando primeras 5 filas para debugging:`);
+      for (let i = 0; i < Math.min(5, filas.length); i++) {
+        const filaTexto = extraerTextoDeCelda(filas[i]);
+        debugLog(`        Fila ${i + 1}: "${filaTexto.substring(0, 150)}..."`);
+      }
+      continue; // Continuar con la siguiente tabla
+    }
     
-    debugLog(`   📋 Fila de headers encontrada en índice ${headerRowIndex}`);
+    // Extraer filas de datos (después del encabezado)
+    const filasConDatos = filas.slice(indiceEncabezado + 1);
+    debugLog(`     📝 Filas con datos: ${filasConDatos.length}`);
     
-    // Procesar filas de datos (después de la fila de headers)
-    for (let ri = headerRowIndex + 1; ri < rowMatches.length; ri++) {
-      const row = rowMatches[ri];
-      const celdas = row.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi);
+    // Extraer nombres de columnas del encabezado para mapeo dinámico
+    const filaEncabezado = filas[indiceEncabezado];
+    const celdasEncabezado = filaEncabezado.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi);
+    const nombresColumnas: string[] = [];
+    
+    if (celdasEncabezado) {
+      nombresColumnas.push(...celdasEncabezado.map(c => extraerTextoDeCelda(c).trim()));
+      debugLog(`     📋 Columnas detectadas: ${JSON.stringify(nombresColumnas)}`);
+    }
+    
+    // Procesar cada fila de datos
+    let actividadesEnEstaTabla = 0;
+    for (let idx = 0; idx < filasConDatos.length; idx++) {
+      const fila = filasConDatos[idx];
+      const celdas = fila.match(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi);
       
-      if (!celdas || celdas.length < 2) continue;
+      if (!celdas || celdas.length < 2) {
+        debugLog(`       ⚠️ Fila ${idx + 1}: menos de 2 celdas, omitiendo`);
+        continue;
+      }
+      
+      debugLog(`       🔍 Fila ${idx + 1}: ${celdas.length} celdas`);
       
       // Extraer texto de cada celda
       const textos = celdas.map(c => extraerTextoDeCelda(c));
       
-      // Saltar filas vacías
-      if (textos.every(t => !t || t.trim() === '' || t === '–' || t === '-')) continue;
-      
-      // Según la estructura HTML real:
-      // - Primera celda puede tener colspan="2" y contiene "Escuela o Dpto" (aprobado por)
-      // - Segunda celda (o tercera si hay colspan) contiene el nombre del proyecto
-      // - Última celda contiene las horas
-      let aprobadoPor = '';
-      let nombreProyecto = '';
-      let horasSemestre = '';
-      
-      // Buscar aprobado por: texto corto que no sea el nombre del proyecto
-      // Típicamente está en las primeras celdas y es corto (< 30 caracteres)
-      for (let i = 0; i < Math.min(3, textos.length); i++) {
-        const texto = textos[i]?.trim() || '';
-        if (texto && texto.length > 0 && texto.length < 30 && 
-            !texto.toUpperCase().includes('APROBADO') &&
-            !texto.toUpperCase().includes('NOMBRE') &&
-            !texto.toUpperCase().includes('ANTEPROYECTO') &&
-            !texto.toUpperCase().includes('PROPUESTA') &&
-            !texto.match(/^\d+\.?\d*$/)) {
-          aprobadoPor = texto;
-          break;
-        }
-      }
-      
-      // Buscar nombre del proyecto: celda más larga (> 20 caracteres) que no sea horas ni aprobado
-      let mejorCandidato = { texto: '', indice: -1, longitud: 0 };
-      for (let i = 0; i < textos.length; i++) {
-        const texto = textos[i]?.trim() || '';
-        if (texto.length > mejorCandidato.longitud &&
-            texto.length > 20 && 
-            !texto.toUpperCase().includes('APROBADO') &&
-            !texto.toUpperCase().includes('ESCUELA') &&
-            !texto.toUpperCase().includes('DPTO') &&
-            !texto.toUpperCase().includes('DEPARTAMENTO') &&
-            !texto.match(/^\d+\.?\d*$/)) {
-          mejorCandidato = { texto, indice: i, longitud: texto.length };
-        }
-      }
-      
-      if (mejorCandidato.texto) {
-        nombreProyecto = mejorCandidato.texto;
-      }
-      
-      // Buscar horas: número con decimales, típicamente en la última celda
-      for (let i = textos.length - 1; i >= 0; i--) {
-        const texto = textos[i]?.trim() || '';
-        if (texto.match(/^\d+\.?\d*$/)) {
-          horasSemestre = texto;
-          break;
-        }
-      }
-      
-      // Validar que tenga al menos nombre o horas
-      if (!nombreProyecto && !horasSemestre) continue;
-      
-      const actividad = {
-        'APROBADO POR': aprobadoPor || '',
-        'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION': nombreProyecto || '',
-        'HORAS SEMESTRE': horasSemestre || '',
+      // Mapear dinámicamente según las columnas encontradas
+      const actividad: Record<string, any> = {
+        'PERIODO': periodo,
       };
       
+      // Mapear cada celda a su columna correspondiente
+      textos.forEach((texto, idx) => {
+        const nombreColumna = nombresColumnas[idx] || '';
+        if (nombreColumna) {
+          // Normalizar nombre de columna
+          const nombreNormalizado = nombreColumna.toUpperCase().trim();
+          
+          // Mapear a campos estándar
+          if (nombreNormalizado.includes('CODIGO')) {
+            actividad['CODIGO'] = texto.trim();
+          } else if (nombreNormalizado.includes('APROBADO') && nombreNormalizado.includes('POR')) {
+            actividad['APROBADO POR'] = texto.trim();
+          } else if (nombreNormalizado.includes('NOMBRE') && 
+                     (nombreNormalizado.includes('PROYECTO') || 
+                      nombreNormalizado.includes('ANTEPROYECTO') ||
+                      nombreNormalizado.includes('PROPUESTA'))) {
+            actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = texto.trim();
+          } else if (nombreNormalizado.includes('HORAS') && nombreNormalizado.includes('SEMESTRE')) {
+            actividad['HORAS SEMESTRE'] = texto.trim();
+          }
+          
+          // También guardar con el nombre original de la columna
+          actividad[nombreColumna] = texto.trim();
+        }
+      });
+      
+      // Manejar casos especiales con colspan
+      // Si hay 3 celdas y la primera tiene colspan, puede ser [colspan=2] [nombre] [horas]
+      if (celdas.length === 3 && !actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION']) {
+        // Verificar si la primera celda tiene colspan
+        const primeraCelda = celdas[0];
+        const tieneColspan = primeraCelda.match(/colspan/i);
+        
+        if (tieneColspan) {
+          // Estructura: [colspan=2] [nombre] [horas]
+          actividad['APROBADO POR'] = textos[0]?.trim() || '';
+          actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = textos[1]?.trim() || '';
+          actividad['HORAS SEMESTRE'] = textos[2]?.trim() || '';
+        } else {
+          // Estructura estándar: [codigo/aprobado] [nombre] [horas]
+          if (!actividad['CODIGO'] && !actividad['APROBADO POR']) {
+            actividad['CODIGO'] = textos[0]?.trim() || '';
+          }
+          if (!actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION']) {
+            actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = textos[1]?.trim() || '';
+          }
+          if (!actividad['HORAS SEMESTRE']) {
+            actividad['HORAS SEMESTRE'] = textos[2]?.trim() || '';
+          }
+        }
+      }
+      
+      // Si hay 4 celdas, puede ser [col1] [col2] [nombre] [horas] o [codigo/aprobado] [nombre] [horas] [extra]
+      if (celdas.length === 4 && !actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION']) {
+        const primeraCelda = celdas[0];
+        const tieneColspan = primeraCelda.match(/colspan/i);
+        
+        if (tieneColspan) {
+          // [colspan=2] [nombre] [horas] [extra]
+          actividad['APROBADO POR'] = `${textos[0]?.trim() || ''} ${textos[1]?.trim() || ''}`.trim();
+          actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = textos[2]?.trim() || '';
+          actividad['HORAS SEMESTRE'] = textos[3]?.trim() || '';
+        } else {
+          // [codigo/aprobado] [nombre] [horas] [extra]
+          if (!actividad['CODIGO'] && !actividad['APROBADO POR']) {
+            actividad['CODIGO'] = textos[0]?.trim() || '';
+          }
+          if (!actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION']) {
+            actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] = textos[1]?.trim() || textos[2]?.trim() || '';
+          }
+          if (!actividad['HORAS SEMESTRE']) {
+            actividad['HORAS SEMESTRE'] = textos[2]?.trim() || textos[3]?.trim() || '';
+          }
+        }
+      }
+      
+      const nombreProyecto = actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] || '';
+      const horasSemestre = actividad['HORAS SEMESTRE'] || '';
+      const codigo = actividad['CODIGO'] || '';
+      const aprobadoPor = actividad['APROBADO POR'] || '';
+      
+      debugLog(`         -> codigo: "${codigo}", aprobadoPor: "${aprobadoPor}", proyecto: "${nombreProyecto?.substring(0, 50)}...", horas: "${horasSemestre}"`);
+      
+      // Filtrar filas que tienen al menos proyecto o horas
+      const tieneContenido = nombreProyecto || horasSemestre;
+      if (!tieneContenido) {
+        debugLog(`         ⚠️ Fila filtrada (vacía)`);
+        continue;
+      }
+      
       actividades.push(actividad);
-      debugLog(`   ✓ Actividad extraída: "${nombreProyecto.substring(0, 50)}..." (${horasSemestre} horas)`);
+      actividadesEnEstaTabla++;
+    }
+    
+    debugLog(`     ✅ Actividades extraídas de esta tabla: ${actividadesEnEstaTabla}`);
+  }
+  
+  debugLog(`\n   ✅ Total actividades extraídas de todas las tablas: ${actividades.length}`);
+  
+  // Logging adicional para debugging de períodos recientes
+  if (actividades.length === 0) {
+    debugLog(`\n   ⚠️ ADVERTENCIA: No se encontraron actividades de investigación`);
+    debugLog(`   🔍 Información de debugging:`);
+    debugLog(`      - Total tablas en HTML: ${tableMatches.length}`);
+    debugLog(`      - Tablas de investigación encontradas: ${tablasInvestigacion.length}`);
+    
+    // Buscar cualquier mención de "investigación" en el HTML
+    const mencionesInvestigacion = (html.match(/investigacion/gi) || []).length;
+    debugLog(`      - Menciones de "investigación" en HTML: ${mencionesInvestigacion}`);
+    
+    // Buscar menciones de "APROBADO POR"
+    const mencionesAprobado = (html.match(/aprobado por/gi) || []).length;
+    debugLog(`      - Menciones de "APROBADO POR" en HTML: ${mencionesAprobado}`);
+    
+    // Buscar menciones de "ANTEPROYECTO"
+    const mencionesAnteproyecto = (html.match(/anteproyecto/gi) || []).length;
+    debugLog(`      - Menciones de "ANTEPROYECTO" en HTML: ${mencionesAnteproyecto}`);
+    
+    if (mencionesInvestigacion > 0 || mencionesAprobado > 0 || mencionesAnteproyecto > 0) {
+      debugLog(`      ⚠️ Hay menciones de investigación en el HTML pero no se encontraron tablas válidas`);
+      debugLog(`      💡 Posibles causas:`);
+      debugLog(`         - La estructura HTML cambió para períodos recientes`);
+      debugLog(`         - Las tablas están en una ubicación diferente`);
+      debugLog(`         - Las tablas tienen un formato diferente`);
     }
   }
   
-  debugLog(`   📊 Total actividades de investigación encontradas: ${actividades.length}`);
   return actividades;
 }
 
@@ -869,10 +1263,12 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
   };
   
   // IMPORTANTE: Primero extraer actividades de investigación usando la estructura HTML real
-  const actividadesInvestigacion = extraerActividadesInvestigacionDeHTML(html);
+  const actividadesInvestigacion = extraerActividadesInvestigacionDeHTML(html, idPeriod);
+  
+  // IMPORTANTE: Primero extraer actividades intelectuales usando la estructura HTML real
+  const actividadesIntelectualesOArtisticas = extraerActividadesIntelectualesDeHTML(html);
   
   const actividadesExtension: any[] = [];
-  const actividadesIntelectualesOArtisticas: any[] = [];
   const actividadesAdministrativas: any[] = [];
   const actividadesComplementarias: any[] = [];
   const docenteEnComision: any[] = [];
@@ -1443,29 +1839,142 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
     // NOTA: Eliminado el flag 'processed' para permitir que se procesen múltiples tipos de actividades
 
     // ACTIVIDADES INTELECTUALES
-    if (
-      headersNorm.some((h) => h.includes('APROBADO')) &&
-      headersNorm.includes('TIPO') &&
-      headersNorm.includes('NOMBRE')
-    ) {
+    // Solo procesar si no se encontraron actividades con la función especializada
+    // Buscar tabla que contenga "ACTIVIDADES INTELECTUALES" o "ACTIVIDADES ARTISTICAS"
+    const esTablaIntelectuales = tableHtml.includes('ACTIVIDADES INTELECTUALES') ||
+                                  tableHtml.includes('ACTIVIDADES ARTISTICAS') ||
+                                  (headersNorm.some((h) => h.includes('APROBADO')) &&
+                                   headersNorm.includes('TIPO') &&
+                                   headersNorm.includes('NOMBRE'));
+    
+    if (esTablaIntelectuales && actividadesIntelectualesOArtisticas.length === 0) {
       debugLog(`✅ Tabla ${contadorTablas} detectada como ACTIVIDADES INTELECTUALES`);
-      for (let ri = 1; ri < rowMatches.length; ri++) {
-        const row = rowMatches[ri];
-        if (extractCells(row).every((c) => c === '')) continue;
-        const obj: Record<string, any> = {};
-        headers.forEach((header, ci) => {
-          const valor = extractCells(row)[ci] || '';
-          const headerUpper = header.toUpperCase();
-          // Normalizar HORAS SEMESTRE
-          if ((headerUpper.includes('HORAS') && headerUpper.includes('SEMESTRE')) ||
-              headerUpper === 'HORAS SEMESTRE' ||
-              (headerUpper.includes('HORAS') && !headerUpper.includes('TOTAL')) ||
-              headerUpper === 'HORAS') {
-            obj['HORAS SEMESTRE'] = valor;
+      
+      // Buscar tabla interna anidada si existe
+      let tablaAProcesar = tableHtml;
+      const tablaAnidadaMatch = tableHtml.match(/<tbody[^>]*>[\s\S]*?<tr[^>]*>[\s\S]*?<td[^>]*>[\s\S]*?(<table[^>]*>[\s\S]*?<\/table>)/i);
+      if (tablaAnidadaMatch && tablaAnidadaMatch[1]) {
+        tablaAProcesar = tablaAnidadaMatch[1];
+        debugLog(`   ✅ Tabla interna anidada encontrada para intelectuales`);
+        // Re-extraer filas de la tabla interna
+        const rowMatchesInterna = tablaAProcesar.match(/<tr[^>]*>[\s\S]*?<\/tr>/gi);
+        if (rowMatchesInterna && rowMatchesInterna.length > 0) {
+          // Re-extraer headers de la tabla interna
+          const headersInterna = extractCells(rowMatchesInterna[0]);
+          const headersNormInterna = headersInterna.map((h) => h.toUpperCase());
+          
+          // Buscar fila de encabezados
+          let indiceEncabezado = 0;
+          for (let i = 0; i < Math.min(3, rowMatchesInterna.length); i++) {
+            const filaTexto = extraerTextoDeCelda(rowMatchesInterna[i]);
+            if (filaTexto.toUpperCase().includes('APROBADO POR') || 
+                filaTexto.toUpperCase().includes('TITULO') || 
+                filaTexto.toUpperCase().includes('TIPO')) {
+              indiceEncabezado = i;
+              // Re-extraer headers de esta fila
+              const headersDeEstaFila = extractCells(rowMatchesInterna[i]);
+              if (headersDeEstaFila.length > 0) {
+                headersInterna.length = 0;
+                headersInterna.push(...headersDeEstaFila);
+              }
+              break;
+            }
           }
-          obj[header] = valor;
-        });
-        actividadesIntelectualesOArtisticas.push(obj);
+          
+          // Procesar filas de datos
+          for (let ri = indiceEncabezado + 1; ri < rowMatchesInterna.length; ri++) {
+            const row = rowMatchesInterna[ri];
+            const cells = extractCells(row);
+            if (cells.every((c) => c === '' || c.trim() === '')) continue;
+            
+            const obj: Record<string, any> = {};
+            let aprobadoPor = '';
+            let titulo = '';
+            let tipo = '';
+            let descripcion = '';
+            
+            // Mapear según número de celdas
+            if (cells.length >= 4) {
+              aprobadoPor = cells[0]?.trim() || '';
+              titulo = cells[1]?.trim() || '';
+              tipo = cells[2]?.trim() || '';
+              descripcion = cells[3]?.trim() || '';
+            } else if (cells.length === 3) {
+              // Sin columna "aprobado por"
+              aprobadoPor = 'No especificado';
+              titulo = cells[0]?.trim() || '';
+              tipo = cells[1]?.trim() || '';
+              descripcion = cells[2]?.trim() || '';
+            }
+            
+            // Guardar todos los campos
+            obj['APROBADO POR'] = aprobadoPor;
+            obj['TITULO'] = titulo;
+            obj['TIPO'] = tipo;
+            obj['DESCRIPCION'] = descripcion;
+            
+            // También guardar con headers originales si están disponibles
+            headersInterna.forEach((header, ci) => {
+              if (ci < cells.length) {
+                obj[header] = cells[ci] || '';
+              }
+            });
+            
+            // Normalizar HORAS SEMESTRE si existe
+            headersInterna.forEach((header, ci) => {
+              const headerUpper = header.toUpperCase();
+              if ((headerUpper.includes('HORAS') && headerUpper.includes('SEMESTRE')) ||
+                  headerUpper === 'HORAS SEMESTRE' ||
+                  (headerUpper.includes('HORAS') && !headerUpper.includes('TOTAL'))) {
+                obj['HORAS SEMESTRE'] = cells[ci] || '';
+              }
+            });
+            
+            if (titulo || tipo) {
+              actividadesIntelectualesOArtisticas.push(obj);
+              debugLog(`   ✓ Actividad intelectual extraída: "${titulo.substring(0, 50)}..." (APROBADO POR: ${aprobadoPor})`);
+            }
+          }
+        }
+      } else {
+        // Procesar tabla normal (sin anidar)
+        for (let ri = 1; ri < rowMatches.length; ri++) {
+          const row = rowMatches[ri];
+          const cells = extractCells(row);
+          if (cells.every((c) => c === '' || c.trim() === '')) continue;
+          
+          const obj: Record<string, any> = {};
+          let aprobadoPor = '';
+          
+          headers.forEach((header, ci) => {
+            const valor = cells[ci] || '';
+            const headerUpper = header.toUpperCase();
+            
+            // Extraer APROBADO POR
+            if (headerUpper.includes('APROBADO') && headerUpper.includes('POR')) {
+              aprobadoPor = valor.trim();
+              obj['APROBADO POR'] = valor.trim();
+            }
+            
+            // Normalizar HORAS SEMESTRE
+            if ((headerUpper.includes('HORAS') && headerUpper.includes('SEMESTRE')) ||
+                headerUpper === 'HORAS SEMESTRE' ||
+                (headerUpper.includes('HORAS') && !headerUpper.includes('TOTAL')) ||
+                headerUpper === 'HORAS') {
+              obj['HORAS SEMESTRE'] = valor;
+            }
+            
+            obj[header] = valor;
+          });
+          
+          // Si no se encontró APROBADO POR en headers, buscar en primera celda
+          if (!aprobadoPor && cells.length >= 4) {
+            aprobadoPor = cells[0]?.trim() || '';
+            obj['APROBADO POR'] = aprobadoPor || 'No especificado';
+          }
+          
+          actividadesIntelectualesOArtisticas.push(obj);
+        }
       }
     }
 
