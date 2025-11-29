@@ -1,0 +1,464 @@
+:root {
+  --primary-color: #d50000; /* Rojo Univalle */
+  --primary-color-dark: #b40000;
+  --text-light: #fff;
+  --background-light: #f8f9fa;
+  --border-color: #dee2e6;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+body {
+  font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+  padding: 20px;
+  background-color: var(--background-light);
+  color: #333;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+/* --- Sección de Búsqueda --- */
+.input-container {
+  max-width: 500px;
+  margin: 0 auto 30px auto;
+  text-align: center;
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.input-container label {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #555;
+  margin-bottom: 15px;
+  display: block;
+}
+
+.input-container input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  margin-bottom: 15px;
+}
+
+button#buscarBtn {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  border: none;
+  border-radius: 8px;
+  background: var(--primary-color);
+  color: var(--text-light);
+  padding: 12px 20px;
+  font-size: 1.1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.3s, transform 0.2s;
+}
+
+button#buscarBtn:hover:not(:disabled) {
+  background: var(--primary-color-dark);
+  transform: translateY(-2px);
+}
+
+button#buscarBtn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+button#buscarBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- Loader / Mensaje Central --- */
+#message-container {
+  text-align: center;
+  margin: 40px 0;
+}
+
+#message-container h3 {
+  font-size: 1.25rem;
+  color: var(--primary-color);
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+
+/* --- Tarjeta de Información Personal --- */
+#personal-info-container .card {
+  max-width: 95%;
+  margin: 0 auto 30px auto;
+  border: none;
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+/* --- Switch de Vista --- */
+.view-switch-container {
+  max-width: 95%;
+  margin: 0 0 30px auto;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 20px;
+}
+
+.view-switch-container label {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #555;
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 60px;
+  height: 34px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  transition: 0.4s;
+  border-radius: 34px;
+}
+
+.slider:before {
+  position: absolute;
+  content: '';
+  height: 26px;
+  width: 26px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  transition: 0.4s;
+  border-radius: 50%;
+}
+
+input:checked + .slider {
+  background-color: var(--primary-color);
+}
+
+input:checked + .slider:before {
+  transform: translateX(26px);
+}
+
+#personal-info-container .card-header {
+  background-color: var(--primary-color);
+  color: var(--text-light);
+  font-size: 1.2rem;
+  font-weight: 500;
+  padding: 15px 20px;
+  display: flex;
+  align-items: center;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px 25px;
+  padding: 20px;
+}
+
+@media (min-width: 1200px) {
+  .info-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
+
+@media (min-width: 900px) and (max-width: 1199px) {
+  .info-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+@media (min-width: 600px) and (max-width: 899px) {
+  .info-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+.info-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.info-item .label {
+  font-size: 0.85rem;
+  color: #6c757d;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+
+.info-item .value {
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: #343a40;
+}
+
+/* --- Contenedor de Resultados por Período --- */
+#results .periodo-card {
+  max-width: 95%;
+  margin: 0 auto 20px auto;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.periodo-card .card-header {
+  background-color: #f1f1f1;
+  color: #333;
+  font-weight: 600;
+  font-size: 1.2rem;
+  padding: 15px 20px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color 0.3s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.periodo-card .card-header:hover {
+  background-color: #e9ecef;
+}
+
+.periodo-card .card-header .toggle-icon {
+  transition: transform 0.3s;
+}
+
+.periodo-card.collapsed .card-header .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.periodo-card .card-body {
+  display: block;
+  transition: all 0.3s ease;
+}
+
+.periodo-card.collapsed .card-body {
+  display: none;
+}
+
+/* --- Categorías de Actividades Desplegables --- */
+.categoria-section {
+  margin-bottom: 20px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.categoria-header {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  font-weight: 600;
+  font-size: 1rem;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: background-color 0.3s;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-left: 4px solid #1976d2;
+}
+
+.categoria-header:hover {
+  background-color: #bbdefb;
+}
+
+.categoria-header .toggle-icon {
+  transition: transform 0.3s;
+}
+
+.categoria-section.collapsed .categoria-header .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.categoria-content {
+  display: block;
+  transition: all 0.3s ease;
+}
+
+.categoria-section.collapsed .categoria-content {
+  display: none;
+}
+
+/* --- Tabla de Actividades --- */
+.actividades-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0;
+  table-layout: auto;
+}
+
+.actividades-table th {
+  background-color: #f8f9fa;
+  color: #495057;
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 4px;
+  text-align: center;
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.actividades-table td {
+  padding: 6px 4px;
+  font-size: 0.85rem;
+  border: 1px solid var(--border-color);
+  vertical-align: top;
+  word-wrap: break-word;
+  max-width: 150px;
+}
+
+.actividades-table .badge {
+  font-size: 0.75rem;
+  padding: 4px 6px;
+}
+
+/* Badges de totales */
+.total-badge {
+  background-color: #787c81;
+  color: white;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+}
+
+.total-badge-section {
+  background-color: #aab0b4;
+  color: white;
+  font-weight: 600;
+  padding: 5px 10px;
+  border-radius: 5px;
+  font-size: 0.85rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+
+.total-badge-category {
+  background-color: #aab0b4;
+  color: white;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+/* Filas de totales */
+.total-row {
+  background-color: #e9ecef !important;
+  font-weight: 600;
+  color: #495057;
+  border-top: 2px solid #6c757d !important;
+  border-bottom: 2px solid #6c757d !important;
+}
+
+.total-row td {
+  color: #495057 !important;
+  font-size: 0.95rem;
+}
+
+.total-row strong {
+  color: #212529 !important;
+  font-size: 1rem;
+}
+
+/* Mensaje tabla vacía */
+.tabla-vacia {
+  font-style: italic;
+  color: #666;
+  padding: 20px;
+  text-align: center;
+  background-color: #fafafa;
+  border-radius: 8px;
+  margin: 10px 0;
+}
+
+/* Utilidad para ocultar */
+.display-none {
+  display: none !important;
+}
+
+.table-responsive {
+  overflow-x: auto;
+  margin: 10px 0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .actividades-table th,
+  .actividades-table td {
+    font-size: 0.75rem;
+    padding: 6px 4px;
+  }
+
+  .actividades-table {
+    table-layout: auto;
+  }
+}
+
+@media (max-width: 1200px) {
+  .actividades-table {
+    font-size: 0.8rem;
+  }
+
+  .actividades-table th,
+  .actividades-table td {
+    padding: 6px 4px;
+  }
+}
+
+@media (max-width: 768px) {
+  .actividades-table {
+    font-size: 0.75rem;
+  }
+
+  .actividades-table th,
+  .actividades-table td {
+    padding: 4px 2px;
+  }
+
+  .actividades-table td {
+    max-width: 150px;
+  }
+}
+

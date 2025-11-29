@@ -1,0 +1,1511 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Formulario</title>
+  <base target="_top">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.0/font/bootstrap-icons.min.css" rel="stylesheet">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f4f4f4;
+      margin: 0;
+      padding: 0;
+      text-align: center;
+      font-family: 'Roboto', sans-serif;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-color: #ddd;
+      box-shadow: rgb(191, 185, 166) 1px 2px 6px;
+      color: rgba(99, 103, 110, 0.96);
+      margin-bottom: 20px;
+      padding-top: 10px;
+    }
+
+    #logoContainer {
+      width: 150px;
+    }
+
+    img {
+      width: 250%;
+      margin-left: 20px;
+      margin-top: -20px;
+    }
+
+    .text-container {
+      flex-grow: 1;
+      text-align: center; /* Para centrar el texto */
+    }
+
+    h1 {
+      margin: 0;
+    }
+
+    #usuarioEscuela {
+      font-size: 16px;
+      color: #555;
+      margin-top: 0px;
+    }
+
+
+    form { 
+      max-width: 90%;
+      margin: 20px auto;
+      background-color: #fff;
+      padding: 20px;
+      border-radius: 5px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      font-family: 'Roboto', sans-serif;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    select, input {
+      width: 50%;
+      padding: 10px;
+      margin-bottom: 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      box-sizing: border-box;
+      font-family: 'Roboto', sans-serif;
+    }
+
+    select[multiple], textarea {
+      height: auto;
+    }
+
+    button {
+      background-color: #007bff;
+      color: #fff;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: 'Roboto', sans-serif;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    .close {
+      color: #aaa;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+    }
+
+    .close:hover,
+    .close:focus {
+      color: black;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .error {
+      border: 2px solid red; /* Cambia el borde a rojo para resaltar el campo */
+    }
+
+    #loadingOverlay {
+        z-index: 999; /* Ahora está encima del spinner */
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.5); /* Negro transparente */
+    }
+
+    #loadingSpinner {
+        z-index: 1000; 
+        position: fixed;
+        top: 50%;
+        left: 50%;
+    }
+
+    .nav-link {
+      background-color: #eb1e00;
+      width: 15%;
+    }
+
+    .nav-link:hover {
+      background-color: #b20c0d;
+    }
+
+    .header-right {
+      margin-left: auto;
+    }
+
+    /* Barra de filtros responsive */
+    .filters-bar {
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    @media (max-width: 768px) {
+      .filters-bar {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      
+      .filters-bar > div {
+        width: 100%;
+        justify-content: space-between;
+      }
+      
+      .filters-bar select {
+        flex: 1;
+        min-width: 150px;
+      }
+      
+      .filters-bar button {
+        width: 100%;
+        margin-top: 5px;
+      }
+    }
+
+    /* Mejorar visibilidad de totales en formulario - tonos sobrios */
+    #horas-totales {
+      color: #495057;
+      font-weight: 600;
+      font-size: 1.2rem;
+      padding: 4px 8px;
+      background-color: #e9ecef;
+      border-radius: 4px;
+      border: 1px solid #6c757d;
+    }
+
+    #total-horas-profesor {
+      padding: 10px;
+      background-color: #f8f9fa;
+      border-left: 4px solid #6c757d;
+      border-radius: 4px;
+      margin-top: 10px;
+    }
+
+    #body-resumen tr:last-child,
+    #body-resumen tr:has(td:contains("Total")) {
+      background-color: #e9ecef !important;
+      font-weight: 600;
+      color: #495057;
+    }
+
+    #body-resumen tr:last-child td,
+    #body-resumen tr:has(td:contains("Total")) td {
+      color: #495057 !important;
+      border-top: 2px solid #6c757d;
+    }
+
+  </style>
+</head>
+<body>
+  <header>
+    <div id="logoContainer">
+      <img src="https://sigetec.univalle.edu.co/img/logo-univalle.png" alt="Logo">
+    </div>
+    <div class="text-container">
+      <h1>Registro de Horas de Asignación Docentes</h1>
+      <p id="usuarioEscuela"><?= usuario ?> - <?= escuela ?></p>
+    </div>
+  </header>
+  <!-- Barra de filtros compacta - una sola línea en desktop -->
+  <div class="filters-bar" style="margin-bottom: 15px; padding: 10px 15px; background-color: #f8f9fa; border-radius: 6px; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px;">
+    <div style="display: flex; align-items: center; gap: 8px; flex: 1; min-width: 200px;">
+      <label for="periodoSelect" style="margin: 0; white-space: nowrap; font-weight: 500; color: #495057;"><strong>Período:</strong></label>
+      <select id="periodoSelect" class="form-control" style="width: auto; min-width: 120px; display: inline-block; padding: 6px 10px; font-size: 0.9rem;">
+        <? var periodos = getPeriodos(); ?>
+        <? for (var i = 0; i < periodos.length; i++) { ?>
+          <option value="<?= periodos[i] ?>" <?= periodos[i] == periodoActivo ? 'selected' : '' ?>><?= periodos[i] ?></option>
+        <? } ?>
+      </select>
+    </div>
+    <button id="verReporteBtn" class="btn btn-primary" style="padding: 6px 15px; font-size: 0.9rem; white-space: nowrap;">Ver Reporte</button>
+  </div>
+
+  <div id="mensaje" class="alert alert-danger" style="display:none;">
+    <p>No tienes permiso para realizar el formulario.</p>
+  </div>
+  <form id="formulario" class="mt-4">
+    <div class="form-group">
+      <label for="nombreProfesor"><strong>Nombre del Docente</strong></label>
+      <input type="text" class="form-control" id="profesorInput" list="profesorList" onchange="mostrarCedula()" required>
+      <datalist id="profesorList" style="width: 500%">
+        <!-- Esta lista se actualizará dinámicamente con los resultados de búsqueda -->
+      </datalist>
+    </div>
+    <div id="fichaProfesor" class="profesor-info" style="display:none; padding-bottom: 10px;">
+      <label><strong>Ficha del Profesor</strong></label>
+      <table class="table">
+        <thead>
+          <tr style="background-color: #ddd;">
+            <th>Nombre</th>
+            <th>Cédula</th>
+            <th>Escuela</th>
+            <th>Departamento</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr style="border-bottom: 2px solid #dee2e6;">
+            <td id="nombreProfesor"></td>
+            <td id="cedulaProfesor"></td>
+            <td id="escuelaProfesor"></td>
+            <td id="departamentoProfesor"></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <div id= "formulario-form-group" class="form-group" style="display:none;">
+      <label for="nombreActividad"><strong>Tipo de Actividad</strong></label>
+      <nav>
+        <div class="nav nav-tabs" id="nav-tab" role="tablist">
+          <button class="nav-link" id="nav-resumen-tab" data-bs-toggle="tab" data-bs-target="#tab-resumen" type="button" role="tab" aria-controls="tab-resumen" aria-selected="true">Resumen</button>
+          <button class="nav-link" id="nav-actividad-doc-tab" data-bs-toggle="tab" data-bs-target="#tab-actividad-doc" type="button" role="tab" aria-controls="tab-actividad-doc" aria-selected="false">Docencia</button>
+          <button class="nav-link" id="nav-actividad-inv-tab" data-bs-toggle="tab" data-bs-target="#tab-actividad-inv" type="button" role="tab" aria-controls="tab-actividad-inv" aria-selected="false">Investigación</button>
+          <button class="nav-link" id="nav-actividad-ext-tab" data-bs-toggle="tab" data-bs-target="#tab-actividad-ext" type="button" role="tab" aria-controls="tab-actividad-ext" aria-selected="true">Extensión</button>
+          <button class="nav-link" id="nav-actividades-int-tab" data-bs-toggle="tab" data-bs-target="#tab-actividades-int" type="button" role="tab" aria-controls="tab-actividades-int" aria-selected="false">Intelectuales</button>
+          <button class="nav-link" id="nav-actividades-adm-tab" data-bs-toggle="tab" data-bs-target="#tab-actividades-adm" type="button" role="tab" aria-controls="tab-actividades-adm" aria-selected="false">Administrativas</button>
+          <button class="nav-link" id="nav-actividad-compl-tab" data-bs-toggle="tab" data-bs-target="#tab-actividad-compl" type="button" role="tab" aria-controls="tab-actividad-compl" aria-selected="false">Complementaria</button>
+          <button class="nav-link" id="nav-actividad-comi-tab" data-bs-toggle="tab" data-bs-target="#tab-actividad-comi" type="button" role="tab" aria-controls="tab-actividad-comi" aria-selected="false">Comisión</button>
+        </div>
+      </nav>
+      <div class="tab-content" id="nav-tabContent" style="padding:10px;">
+        <div class="tab-pane fade show active" id="tab-resumen" role="tabpanel" aria-labelledby="nav-resumen-tab">
+          <div style="padding:10px; display:flex; justify-content:left;">Resumen de Horas por Categoría</div>
+          <div class="row" style="padding:10px;">
+            <table class="table" style="margin-left:10px;">
+              <thead>
+                <tr style="background-color: #ddd;">
+                  <th scope="col" style="padding-right: 10px; width: 360px;">Tipo de Actividad</th>
+                  <th scope="col" style="padding-right: 10px; width: 360px;">Categoría</th>
+                  <th scope="col" style="padding-right: 10px; width: 360px;">Total de Horas</th>
+                </tr>
+              </thead>
+              <tbody id="body-resumen">
+                <!-- Aquí se agregarán las filas del resumen -->
+              </tbody>
+            </table>
+          </div>
+          <div class="row" style="padding:10px;">
+            <div id="total-horas-profesor">
+              <strong>Total de Horas del Profesor: </strong><span id="horas-totales"></span>
+            </div>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="tab-actividad-ext" role="tabpanel" aria-labelledby="nav-actividad-ext-tab">
+          <div style="padding:10px; display:flex; justify-content:left;">Agregar Registros</div>
+          <div class="row-container" id="row-container-id">
+            <div class="row"  style="padding:10px;">
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <select id="categoria-ext" class="form-control" required>
+                    <!-- Opciones de categoría para Actividad de Extensión -->
+                  </select>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="nombre-actividad-ext" placeholder="Nombre Actividad" required>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="number" class="form-control" id="numero-horas-ext" min="0" step="1" placeholder="Número de horas"required>
+                </div>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-success" onclick="enviarDatos(this)">
+                  <i class="fas fa-save"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-danger" onclick="deleteRow(this)">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-primary" onclick="addRow(this)">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="padding:10px;">
+              <!-- Contenedor para mostrar la tabla de asignaciones de Actividad de Extensión -->
+              <div id="tabla-actividad-ext">
+                <div style="padding:10px; display:flex; justify-content:left; width:100%">Registros Actividad de Extensión</div>
+                <table class="table" style="margin-left:10px;" >
+                  <thead>
+                    <tr style="background-color: #ddd;">
+                      <th scope="col" style="padding-right: 10px; width: 360px;">ID</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Categoría</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Nombre de la Actividad</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Número de Horas</th>
+                      <th scope="col" style="padding-right: 10px; width: 300px;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="body-actividad-ext">
+                    <!-- Aquí se agregarán las filas de la tabla -->
+                  </tbody>
+                </table>
+              </div>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="tab-actividades-int" role="tabpanel" aria-labelledby="nav-actividades-int-tab">
+          <div style="padding:10px; display:flex; justify-content:left;">Agregar Registros</div>
+          <div class="row-container" id="row-container-id">
+            <div class="row" style="padding:10px;">
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <select id="categoria-int" class="form-control" required>
+                    <!-- Opciones de categoría para Actividades Intelectuales -->
+                  </select>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="nombre-actividad-int" placeholder="Nombre Actividad" required>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="number" class="form-control" id="numero-horas-int" min="0" step="1" placeholder="Número de horas" required>
+                </div>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-success" onclick="enviarDatos(this)">
+                  <i class="fas fa-save"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-danger" onclick="deleteRow(this)">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-primary" onclick="addRow(this)">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="padding:10px;">
+              <!-- Contenedor para mostrar la tabla de asignaciones de Actividad Int -->
+              <div id="tabla-actividad-int">
+                <div style="padding:10px; display:flex; justify-content:left;">Registros Actividades Intelectuales</div>
+                <table class="table" style="margin-left:10px;">
+                  <thead>
+                    <tr style="background-color: #ddd;">
+                      <th scope="col" style="padding-right: 10px; width: 360px;">ID</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Categoría</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Nombre de la Actividad</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Número de Horas</th>
+                      <th scope="col" style="padding-right: 10px; width: 300px;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="body-actividades-int">
+                    <!-- Aquí se agregarán las filas de la tabla -->
+                  </tbody>
+                </table>
+              </div>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="tab-actividades-adm" role="tabpanel" aria-labelledby="nav-actividades-adm-tab">
+          <div style="padding:10px; display:flex; justify-content:left;">Agregar Registros</div>
+          <div class="row-container" id="row-container-id">
+            <div class="row" style="padding:10px;">
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <select id="categoria-adm" class="form-control" required>
+                    <!-- Opciones de categoría para Actividades Administrativas -->
+                  </select>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="nombre-actividad-adm" placeholder="Nombre Actividad" required>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="number" class="form-control" id="numero-horas-adm" min="0" step="1" placeholder="Número de horas" required>
+                </div>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-success" onclick="enviarDatos(this)">
+                  <i class="fas fa-save"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-danger" onclick="deleteRow(this)">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-primary" onclick="addRow(this)">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="padding:10px;">
+              <!-- Contenedor para mostrar la tabla de asignaciones de Actividad Adm -->
+              <div id="tabla-actividades-adm">
+                <div style="padding:10px; display:flex; justify-content:left;">Registros Actividades Administrativas</div>
+                <table class="table" style="margin-left:10px;">
+                  <thead>
+                    <tr style="background-color: #ddd;">
+                      <th scope="col" style="padding-right: 10px; width: 360px;">ID</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Categoría</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Nombre de la Actividad</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Número de Horas</th>
+                      <th scope="col" style="padding-right: 10px; width: 300px;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="body-actividades-adm">
+                    <!-- Aquí se agregarán las filas de la tabla -->
+                  </tbody>
+                </table>
+              </div>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="tab-actividad-compl" role="tabpanel" aria-labelledby="nav-actividad-compl-tab">
+          <div style="padding:10px; display:flex; justify-content:left;">Agregar Registros</div>
+          <div class="row-container" id="row-container-id">
+            <div class="row" style="padding:10px;">
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <select id="categoria-compl" class="form-control" required>
+                    <!-- Opciones de categoría para Actividad Complementaria -->
+                  </select>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="nombre-actividad-compl" placeholder="Nombre Actividad" required>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="number" class="form-control" id="numero-horas-compl" min="0" step="1" placeholder="Número de horas" required>
+                </div>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-success" onclick="enviarDatos(this)">
+                  <i class="fas fa-save"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-danger" onclick="deleteRow(this)">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-primary" onclick="addRow(this)">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+            <div class="row" style="padding:10px;">
+                <!-- Contenedor para mostrar la tabla de asignaciones de Actividad Compl -->
+                <div id="tabla-actividad-compl">
+                  <div style="padding:10px; display:flex; justify-content:left;">Registros Actividades Complementarias</div>
+                  <table class="table" style="margin-left:10px;">
+                    <thead>
+                      <tr style="background-color: #ddd;">
+                      <th scope="col" style="padding-right: 10px; width: 360px;">ID</th>
+                        <th scope="col" style="padding-right: 10px; width: 360px;">Categoría</th>
+                        <th scope="col" style="padding-right: 10px; width: 360px;">Nombre de la Actividad</th>
+                        <th scope="col" style="padding-right: 10px; width: 360px;">Número de Horas</th>
+                        <th scope="col" style="padding-right: 10px; width: 300px;">Acciones</th>
+                      </tr>
+                    </thead>
+                    <tbody id="body-actividad-compl">
+                      <!-- Aquí se agregarán las filas de la tabla -->
+                    </tbody>
+                  </table>
+                </div>
+            </div>
+        </div>
+        <div class="tab-pane fade" id="tab-actividad-doc" role="tabpanel" aria-labelledby="nav-actividad-doc-tab">
+          <div style="padding:10px; display:flex; justify-content:left;">Agregar Registros</div>
+          <div class="row-container" id="row-container-id">
+            <div class="row" style="padding:10px;">
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <select id="categoria-doc" class="form-control" required>
+                    <!-- Opciones de categoría para Actividad Docencia -->
+                  </select>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="nombre-actividad-doc" placeholder="Nombre Actividad" required>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="number" class="form-control" id="numero-horas-doc" min="0" step="1" placeholder="Número de horas" required>
+                </div>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-success" onclick="enviarDatos(this)">
+                  <i class="fas fa-save"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-danger" onclick="deleteRow(this)">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-primary" onclick="addRow(this)">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="padding:10px;">
+              <!-- Contenedor para mostrar la tabla de asignaciones de Actividad Compl -->
+              <div id="tabla-actividad-doc">
+                <div style="padding:10px; display:flex; justify-content:left;">Registros Actividades Complementarias</div>
+                <table class="table" style="margin-left:10px;">
+                  <thead>
+                    <tr style="background-color: #ddd;">
+                      <th scope="col" style="padding-right: 10px; width: 360px;">ID</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Categoría</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Nombre de la Actividad</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Número de Horas</th>
+                      <th scope="col" style="padding-right: 10px; width: 300px;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="body-actividad-doc">
+                    <!-- Aquí se agregarán las filas de la tabla -->
+                  </tbody>
+                </table>
+              </div>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="tab-actividad-comi" role="tabpanel" aria-labelledby="nav-actividad-comi-tab">
+          <div style="padding:10px; display:flex; justify-content:left;">Agregar Registros</div>
+          <div class="row-container" id="row-container-id">
+            <div class="row" style="padding:10px;">
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <select id="categoria-comi" class="form-control" required>
+                    <!-- Opciones de categoría para Actividad comisión -->
+                  </select>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="text" class="form-control" id="nombre-actividad-comi" placeholder="Nombre Actividad" required>
+                </div>
+              </div>
+              <div scope="col" style="padding-right: 10px; width: 360px;">
+                <div class="form-group">
+                  <input type="number" class="form-control" id="numero-horas-comi" min="0" step="1" placeholder="Número de horas" required>
+                </div>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-success" onclick="enviarDatos(this)">
+                  <i class="fas fa-save"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-danger" onclick="deleteRow(this)">
+                  <i class="fas fa-trash"></i>
+                </button>
+              </div>
+              <div class="col-auto">
+                <button type="button" class="btn btn-primary" onclick="addRow(this)">
+                  <i class="fas fa-plus"></i>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="row" style="padding:10px;">
+              <!-- Contenedor para mostrar la tabla de asignaciones de Actividad Compl -->
+              <div id="tabla-actividad-comi">
+                <div style="padding:10px; display:flex; justify-content:left;">Registros Actividades Complementarias</div>
+                <table class="table" style="margin-left:10px;">
+                  <thead>
+                    <tr style="background-color: #ddd;">
+                      <th scope="col" style="padding-right: 10px; width: 360px;">ID</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Categoría</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Nombre de la Actividad</th>
+                      <th scope="col" style="padding-right: 10px; width: 360px;">Número de Horas</th>
+                      <th scope="col" style="padding-right: 10px; width: 300px;">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody id="body-actividad-comi">
+                    <!-- Aquí se agregarán las filas de la tabla -->
+                  </tbody>
+                </table>
+              </div>
+          </div>
+        </div>
+        <div class="tab-pane fade" id="tab-actividad-inv" role="tabpanel" aria-labelledby="nav-actividad-inv-tab">
+            <div style="padding:10px; display:flex; justify-content:left;">Agregar Registros</div>
+            <div class="row-container" id="row-container-id">
+                <div class="row" style="padding:10px;">
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <select id="tipo-actividad-inv" class="form-control" required>
+                                <option value="Anteproyecto de Investigación">Anteproyecto de Investigación</option>
+                                <option value="Proyecto de Investigación">Proyecto de Investigación</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <select id="categoria-inv" class="form-control" required>
+                                <option value="Sin Categorización">Sin Categorización</option>
+                                <option value="No Aplica">No Aplica</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <input type="text" class="form-control" id="nombre-actividad-inv" placeholder="Nombre Actividad" required>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="form-group">
+                            <input type="number" class="form-control" id="numero-horas-inv" min="0" step="1" placeholder="Número de horas" required>
+                        </div>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-success" onclick="enviarDatosInvestigacion(this)">
+                            <i class="fas fa-save"></i>
+                        </button>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-danger" onclick="deleteRow(this)">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                    <div class="col-auto">
+                        <button type="button" class="btn btn-primary" onclick="addRow(this)">
+                            <i class="fas fa-plus"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="row" style="padding:10px;">
+                <div id="tabla-actividad-inv">
+                    <div style="padding:10px; display:flex; justify-content:left;">Registros Actividades de Investigación</div>
+                    <table class="table" style="margin-left:10px;">
+                        <thead>
+                            <tr style="background-color: #ddd;">
+                                <th scope="col" style="padding-right: 10px; width: 360px;">Tipo de Actividad</th>
+                                <th scope="col" style="padding-right: 10px; width: 360px;">Nombre de la Actividad</th>
+                                <th scope="col" style="padding-right: 10px; width: 360px;">Número de Horas</th>
+                                <th scope="col" style="padding-right: 10px; width: 300px;">Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody id="body-actividad-inv">
+                            <!-- Aquí se agregarán las filas de la tabla -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+      </div>
+    </div>
+    <input type="hidden" id="cedula" name="cedula">
+    <input type="hidden" id="escuela" name="escuela">
+    <input type="hidden" id="departamento" name="departamento">
+  </form>
+  <div id="loadingOverlay" style="display: none;"></div> <!-- Capa de superposición -->
+  <div id="loadingSpinner" class="spinner-border text-primary" role="status" style="display: none;">
+      <span class="sr-only">Loading...</span>
+  </div>
+
+  <div class="modal fade" id="successModal" tabindex="-1" role="dialog" aria-labelledby="successModalLabel" aria-hidden="true">
+      <div class="modal-dialog modal-dialog-centered" role="document">
+          <div class="modal-content">
+              <div class="modal-header">
+                  <h5 class="modal-title" id="exampleModalLabel">Éxito</h5>
+                  <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                      <span aria-hidden="true">&times;</span>
+                  </button>
+              </div>
+              <div class="modal-body">
+                  Sus datos han sido enviados correctamente.
+              </div>
+              <div class="modal-footer">
+                  <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+              </div>
+          </div>
+      </div>
+  </div>
+  <!-- Modal de advertencia por campos vacíos -->
+  <div class="modal fade" id="warningModal" tabindex="-1" aria-labelledby="warningModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="warningModalLabel">Advertencia</h5>
+          <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                      <span aria-hidden="true">&times;</span>
+          </button>
+        </div>
+        <div class="modal-body">
+          Por favor, llene todos los campos obligatorios.
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-dismiss="modal">Cerrar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+  <script>
+        if (!window.jQuery) {
+            var head = document.getElementsByTagName('head')[0];
+            
+            var linkBootstrap = document.createElement('link');
+            linkBootstrap.rel = 'stylesheet';
+            linkBootstrap.href = 'https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css';
+            head.appendChild(linkBootstrap);
+
+            var linkFontAwesome = document.createElement('link');
+            linkFontAwesome.rel = 'stylesheet';
+            linkFontAwesome.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/css/all.min.css';
+            head.appendChild(linkFontAwesome);
+
+            var linkBootstrapIcons = document.createElement('link');
+            linkBootstrapIcons.rel = 'stylesheet';
+            linkBootstrapIcons.href = 'https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css';
+            head.appendChild(linkBootstrapIcons);
+
+            var scriptBootstrap = document.createElement('script');
+            scriptBootstrap.src = 'https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js';
+            head.appendChild(scriptBootstrap);
+
+            var scriptBootstrapJS = document.createElement('script');
+            scriptBootstrapJS.src = 'https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js';
+            head.appendChild(scriptBootstrapJS);
+        }
+  </script>
+  <script>
+    
+
+    document.getElementById('verReporteBtn').addEventListener('click', function() {
+      google.script.run.withSuccessHandler(function(url) {
+        if (url) {
+          window.open(url, '_blank'); // Asegura que la URL se abre en una nueva pestaña
+        } else {
+          alert("No se encontró una URL asociada a este usuario.");
+        }
+      }).getUrlUsuarioActivo();
+    });
+
+
+    var periodoActual = "<?= periodoActivo ?>"; 
+
+    window.onload = function() {
+        var isCurrentPeriod = document.getElementById("periodoSelect").value === periodoActual;
+        cargarListaProfesores();
+        var profesorSeleccionado = document.getElementById("profesorInput").value;
+        var tipoActividad = obtenerTipoActividadSeleccionada();
+
+        if (periodoActual && isCurrentPeriod) {
+            cargarResumen(profesorSeleccionado);
+            filtrarTablas(periodoActual, profesorSeleccionado, tipoActividad);
+        }
+    };
+
+    // Esta función se llama cuando se cambia el periodo en el select
+    document.getElementById("periodoSelect").addEventListener("change", function() {
+        var selectedPeriodo = this.value.trim().toLowerCase();  // Convertir a minúsculas
+        console.log("Periodo seleccionado: ", selectedPeriodo);  // Log para verificar el periodo seleccionado
+        periodoActual = selectedPeriodo;  // Actualizar correctamente el periodo
+
+        if (periodoActual) {
+            var profesorSeleccionado = document.getElementById("profesorInput").value;
+            var tipoActividad = obtenerTipoActividadSeleccionada();  
+            console.log("Profesor seleccionado: ", profesorSeleccionado);  // Verificar el profesor seleccionado
+            console.log("Tipo de actividad seleccionada: ", tipoActividad);  // Verificar el tipo de actividad seleccionada
+
+            cargarResumen(profesorSeleccionado); 
+            filtrarTablas(periodoActual, profesorSeleccionado, tipoActividad);  // Usar el nuevo periodo seleccionado
+        }
+    });
+
+
+
+    function cargarResumen(profesorSeleccionado) {
+        google.script.run.withSuccessHandler(function(asignaciones) {
+            var categorias = {};
+
+            asignaciones.forEach(function(asignacion) {
+                if (!categorias[asignacion.tipoActividad]) {
+                    categorias[asignacion.tipoActividad] = {};
+                }
+                if (!categorias[asignacion.tipoActividad][asignacion.categoria]) {
+                    categorias[asignacion.tipoActividad][asignacion.categoria] = 0;
+                }
+                categorias[asignacion.tipoActividad][asignacion.categoria] += asignacion.numeroHoras;
+            });
+
+            var tbody = document.getElementById("body-resumen");
+            tbody.innerHTML = "";
+
+            Object.keys(categorias).forEach(function(tipoActividad) {
+                Object.keys(categorias[tipoActividad]).forEach(function(categoria) {
+                    var row = "<tr>";
+                    row += "<td scope='col'>" + tipoActividad + "</td>";
+                    row += "<td scope='col'>" + categoria + "</td>";
+                    row += "<td scope='col'>" + categorias[tipoActividad][categoria] + "</td>";
+                    row += "</tr>";
+                    tbody.innerHTML += row;
+                });
+            });
+
+            var totalHoras = Object.values(categorias).reduce(function(total, tipoCategoria) {
+                return total + Object.values(tipoCategoria).reduce(function(subtotal, horas) {
+                    return subtotal + horas;
+                }, 0);
+            }, 0);
+
+            document.getElementById("horas-totales").textContent = totalHoras;
+        }).obtenerDatosAsignaciones2024(profesorSeleccionado, "Resumen", periodoActual); // Pasar el periodo actual
+    }
+
+    // Función para cargar las asignaciones cuando se cambia de pestaña
+    function cargarAsignacionesOnTabChange() {
+        var selectedTab = event.target;
+        var tipoActividad = obtenerTipoActividadSeleccionada(selectedTab);
+        var profesorSeleccionado = document.getElementById("profesorInput").value;
+        if (profesorSeleccionado && tipoActividad) {
+            obtenerAsignaciones(profesorSeleccionado, tipoActividad);
+        }
+    }
+
+    // Función para obtener el tipo de actividad seleccionada
+    function obtenerTipoActividadSeleccionada() {
+        var selectedTab = document.querySelector('.nav-link.active');
+        var controlId = selectedTab.getAttribute('aria-controls');
+        return controlId.replace('tab-', ''); 
+    }
+
+    // Función para obtener las asignaciones con el periodo correcto
+    function obtenerAsignaciones(profesorSeleccionado, tipoActividad) {
+        var tipoActividadHoja;
+
+        switch (tipoActividad) {
+            case "actividad-ext":
+                tipoActividadHoja = "Actividad de Extensión";
+                break;
+            case "actividades-int":
+                tipoActividadHoja = "Actividades Intelectuales";
+                break;
+            case "actividades-adm":
+                tipoActividadHoja = "Actividades Administrativas";
+                break;
+            case "actividad-compl":
+                tipoActividadHoja = "Actividad Complementaria";
+                break;
+            case "actividad-doc":
+                tipoActividadHoja = "Actividades de Docencia";
+                break;
+            case "actividad-comi":
+                tipoActividadHoja = "Comisión";
+                break;
+            case "actividad-inv":
+                tipoActividadHoja = ["Anteproyecto de Investigación", "Proyecto de Investigación"];
+                break;
+            default:
+                console.error("Tipo de actividad no reconocido:", tipoActividad);
+                return;
+        }
+
+        showLoading();
+        google.script.run.withSuccessHandler(function(asignaciones) {
+            var tbody = document.getElementById("body-" + tipoActividad);
+            tbody.innerHTML = "";
+
+            if (asignaciones.length === 0) {
+                tbody.innerHTML = "<tr><td colspan='3'>No hay datos disponibles</td></tr>";
+            } else {
+                asignaciones.reverse().forEach(function(asignacion) {
+                    var row = "<tr>";
+                    row += "<td scope='col'>" + asignacion.id + "</td>";
+                    if (tipoActividad !== "actividad-inv") {
+                      row += "<td scope='col'>" + asignacion.categoria + "</td>";
+                    }
+                    row += "<td scope='col'><input type='text' value='" + asignacion.nombreActividad + "' style='width: 100%;' disabled></td>";
+                    row += "<td scope='col'><input type='number' value='" + asignacion.numeroHoras + "' style='width: 100%;' disabled></td>";
+                    row += `<td scope='col'>
+                              <i class="fas fa-edit" style="color: blue; cursor: pointer;" onclick="habilitarEdicion(this, '${asignacion.id}')"></i>
+                              <i class="fas fa-save" style="color: green; cursor: pointer; display: none;" onclick="guardarEdicion(this, '${asignacion.id}')"></i>
+                              <i class="fas fa-trash" style="color: red; cursor: pointer;" onclick="eliminarFila(this, '${asignacion.id}')"></i>
+                            </td>`;
+                    row += "</tr>";
+                    tbody.innerHTML += row;
+                });
+            }
+
+            var totalHoras = calcularTotalHoras(asignaciones);
+            agregarFilaTotal(totalHoras, tipoActividad);
+            hideLoading();
+        }).obtenerDatosAsignaciones2024(profesorSeleccionado, tipoActividadHoja, periodoActual);
+    }
+
+    function filtrarTablas(periodo, profesor, tipoActividad) {
+        console.log("Filtrar Tablas - Periodo:", periodo);
+        console.log("Filtrar Tablas - Profesor:", profesor);
+        console.log("Filtrar Tablas - Tipo de Actividad:", tipoActividad);
+
+        if (!periodo || !profesor || !tipoActividad) {
+            console.error("Uno o más parámetros no están definidos:", { periodo, profesor, tipoActividad });
+            return;
+        }
+
+        obtenerAsignaciones(profesor, tipoActividad, periodo);
+    }
+
+
+
+    // Esta función actualiza las tablas en el frontend
+    function actualizarTablasConAsignaciones(asignaciones, tipoActividad) {
+      var tbody = document.getElementById("body-" + tipoActividad);  // Obtener el tbody correcto según el tipo de actividad
+      tbody.innerHTML = "";  // Limpiar la tabla antes de agregar nuevas filas
+
+      if (asignaciones.length === 0) {
+        // Si no hay asignaciones, muestra un mensaje en la tabla
+        tbody.innerHTML = "<tr><td colspan='3'>No hay datos disponibles</td></tr>";
+      } else {
+        // Agregar las asignaciones filtradas a la tabla
+        asignaciones.forEach(function(asignacion) {
+          var row = "<tr>";
+          row += "<td scope='col'>" + asignacion.id + "</td>";
+          if (tipoActividad !== "actividad-inv") {
+            row += "<td scope='col'>" + asignacion.categoria + "</td>";
+          }
+          row += "<td scope='col'><input type='text' value='" + asignacion.nombreActividad + "' style='width: 100%;' disabled></td>";
+          row += "<td scope='col'><input type='number' value='" + asignacion.numeroHoras + "' style='width: 100%;' disabled></td>";
+          row += `<td scope='col'>
+                    <i class="fas fa-edit" style="color: blue; cursor: pointer;" onclick="habilitarEdicion(this, '${asignacion.id}')"></i>
+                    <i class="fas fa-save" style="color: green; cursor: pointer; display: none;" onclick="guardarEdicion(this, '${asignacion.id}')"></i>
+                    <i class="fas fa-trash" style="color: red; cursor: pointer;" onclick="eliminarFila(this, '${asignacion.id}')"></i>
+                  </td>`;
+          row += "</tr>";
+          tbody.innerHTML += row;
+        });
+      }
+    }
+
+
+
+    $(document).ready(function() {
+      $('[data-bs-toggle="tab"]').each(function() {
+        var $tab = $(this);
+        $tab.on('click', function() {
+          if (!$tab.hasClass('active')) {
+            $tab.siblings().removeClass('active');
+            $tab.addClass('active');
+            var target = $tab.data('bs-target');
+            $(target).siblings().removeClass('show active');
+            $(target).addClass('show active');
+          }
+        });
+      });
+    });
+
+    var cedulaSeleccionada = "";
+    var escuelaSeleccionada = "";
+    var departamentoSeleccionado = '';
+    var categoriaSeleccionada = '';
+    var nombreActividad = '';
+    var numeroHoras = 0;
+
+    function showLoading() {
+      $("#loadingOverlay").css("display", "block");
+      $("#loadingSpinner").css("display", "block");
+    }
+
+    function hideLoading() {
+      $("#loadingOverlay").css("display", "none");
+      $("#loadingSpinner").css("display", "none");
+    }
+
+    document.getElementById("nav-actividad-inv-tab").addEventListener("click", function() {
+        cargarCategoriasInvestigacion();
+        cargarAsignacionesInvestigacion();
+    });
+
+
+    function cargarCategorias(tipoActividad, selectId) {
+            const opciones = {
+                'Extensión': ["Docente", "Investigativa", "Solidaria", "Consultoria", "DU", "Materiales didáctivos", "Sin categorizar", "No Aplica"],
+                'Intelectuales': ["Conferencia", "Ensayo-Artículo", "Libro", "Docente", "Materiales cursos", "Materiales didácticos", "DU", "Sin categorizar", "No aplica"],
+                'Administrativas': ["Asesor", "CEDETES", "Coordinador", "Decano", "Director", "Subdirector", "Jefe", "Jefe de sección", "Secretario", "Vicedecano", "Representante", "Sin categorizar", "No aplica"],
+                'Complementaria': ["Claustro", "Comité", "Representante", "Evaluación de Producción", "Atención estudiantes", "Actividad extracurricular", "Coordinador", "Jefe", "Sin asignación", "No aplica"],
+                'Docencia': ["Pregrado", "Posgrado", "Tesis", "No aplica"],
+                'Comisión': ["Sin categorización", "No aplica"],
+                'Investigación': ["Sin Categorización", "No Aplica"]
+            };
+
+            const categoriaSelect = document.getElementById(selectId);
+            const categorias = opciones[tipoActividad] || [];
+
+            categoriaSelect.innerHTML = "";
+            let initialOption = document.createElement("option");
+            initialOption.value = "";
+            initialOption.disabled = true;
+            initialOption.selected = true;
+            initialOption.textContent = "Seleccionar Categoría";
+            categoriaSelect.appendChild(initialOption);
+
+            categorias.forEach(function (categoria) {
+                let optionElement = document.createElement("option");
+                optionElement.value = categoria;
+                optionElement.text = categoria;
+                categoriaSelect.add(optionElement);
+            });
+    }
+
+    document.getElementById("nav-tab").addEventListener("click", function(event) {
+      if (event.target.classList.contains('nav-link')) {
+        var tipoActividad = event.target.textContent.trim();
+        cargarCategorias(tipoActividad);
+        cargarAsignacionesOnTabChange();
+      }
+    });
+
+    document.querySelectorAll('.nav-link').forEach(function (tab) {
+            tab.addEventListener('click', function (event) {
+                const tipoActividad = event.target.textContent.trim();
+                const selectId = event.target.getAttribute('data-select-id'); // Atributo personalizado para identificar el select a actualizar
+                cargarCategorias(tipoActividad, selectId);
+            });
+        });
+
+    $('a[data-bs-toggle="tab"]').on('show.bs.tab', function (e) {
+      cargarAsignacionesOnTabChange();
+    });
+
+    google.script.run.withSuccessHandler(function(profesores) {
+      var select = document.getElementById("profesorSelect");
+      profesores.forEach(function(profesor) {
+        var option = document.createElement("option");
+        option.text = profesor;
+        select.add(option);
+      });
+    }).getProfesores();
+
+    function cargarListaProfesores() {
+        google.script.run.withSuccessHandler(function (data) {
+            var profesores = data.profesores;
+            var datalist = document.getElementById("profesorList");
+            datalist.innerHTML = "";
+
+            profesores.forEach(function (profesor) {
+                var option = document.createElement("option");
+                option.value = profesor.nombre;
+                datalist.appendChild(option);
+            });
+        }).getProfesores();
+    }
+
+    function mostrarCedula() {
+        var input = document.getElementById("profesorInput").value;
+        var options = document.querySelectorAll('#profesorList option');
+
+        options.forEach(function (option) {
+            if (option.value === input) {
+                cedulaSeleccionada = option.getAttribute("data-cedula");
+                escuelaSeleccionada = option.getAttribute("data-escuela");
+                departamentoSeleccionado = option.getAttribute("data-departamento");
+            }
+        });
+    }
+
+    document.getElementById("profesorInput").addEventListener("change", cargarResumen);
+    document.getElementById("profesorInput").addEventListener("input", mostrarCedula);
+    document.getElementById("profesorInput").addEventListener("click", cargarListaProfesores);
+
+    function buscarEnLista() {
+      var input = document.getElementById("profesorInput");
+      var query = input.value.trim().toLowerCase(); 
+      var options = document.querySelectorAll('#profesorList option');
+
+      options.forEach(function(option) {
+        if (option.value.toLowerCase().includes(query)) {
+          option.style.display = 'block'; 
+        } else {
+          option.style.display = 'none'; 
+        }
+      });
+    }
+
+    document.getElementById("profesorInput").addEventListener("input", buscarEnLista);
+
+    function mostrarFichaProfesor() {
+      nombreProfesor.textContent = document.getElementById("profesorInput").value;
+      cedulaProfesor.textContent = cedulaSeleccionada;
+      escuelaProfesor.textContent = escuelaSeleccionada;
+      departamentoProfesor.textContent = departamentoSeleccionado;
+
+      document.getElementById("fichaProfesor").style.display = "block";
+    }
+
+    document.getElementById("profesorInput").addEventListener("change", mostrarFichaProfesor);
+    document.getElementById("profesorInput").addEventListener("change", mostrarForm);
+    document.getElementById("profesorInput").addEventListener("change", function() {
+      if (this.value) {
+        cargarResumen(this.value);
+        cargarAsignacionesOnTabChange();
+      }
+    });
+
+    document.querySelectorAll('.nav-link').forEach(item => {
+      item.addEventListener('click', event => {
+        cargarAsignacionesOnTabChange();
+      });
+    });
+
+    function calcularTotalHoras(asignaciones) {
+        return asignaciones.reduce(function(total, asignacion) {
+            return total + Number(asignacion.numeroHoras);
+        }, 0);
+    }
+
+    function agregarFilaTotal(totalHoras, tipoActividad) {
+        var tbody = document.getElementById("body-" + tipoActividad);
+
+        var totalRow = "<tr>";
+        totalRow += "<td scope='col' colspan='3'>Total de horas:</td>";
+        totalRow += "<td scope='col'>" + totalHoras + "</td>";
+        totalRow += "</tr>";
+
+        tbody.innerHTML += totalRow;
+    }
+
+    function addRow(button) {
+      var container = button.closest('.tab-pane').querySelector('.row-container');
+      var row = button.closest('.row');
+      var newRow = row.cloneNode(true);
+      
+      var inputs = newRow.querySelectorAll('input[type="text"], input[type="number"], select');
+      inputs.forEach(function(input) {
+        input.value = '';
+        input.disabled = false; 
+      });
+
+      newRow.style.backgroundColor = "#ffffff";
+      container.appendChild(newRow);
+    }
+
+    function deleteRow(button) {
+      var row = button.closest('.row');
+      row.parentNode.removeChild(row);
+    }
+
+    function eliminarFila(button) {
+        var row = button.closest('tr');
+        var id = row.querySelector('td').textContent.trim(); // Suponiendo que el ID es la primera celda en la fila
+
+        // Llama a la función Apps Script para eliminar
+        google.script.run.withSuccessHandler(function() {
+            row.remove();  // Remover fila del frontend después de éxito en la eliminación
+        }).eliminarAsignacion(id, obtenerTipoActividadSeleccionada(), periodoActual);
+    }
+
+
+
+    //Para Investigación
+    function enviarDatosInvestigacion(button) {
+        var row = button.closest('.row');
+
+        var inputs = row.querySelectorAll('input[required]');
+        var selects = row.querySelectorAll('select[required]');
+        var isValid = true;
+
+        inputs.forEach(function(input) {
+            if (input.value.trim() === '') {
+                isValid = false;
+                input.style.border = '1px solid red';
+            } else {
+                input.style.border = '';
+            }
+        });
+
+        selects.forEach(function(select) {
+            if (select.value.trim() === '') {
+                isValid = false;
+                select.style.border = '1px solid red';
+            } else {
+                select.style.border = '';
+            }
+        });
+
+        if (!isValid) {
+            $('#warningModal').modal('show');
+            return;
+        }
+
+        showLoading();
+
+        var cedula = cedulaSeleccionada;
+        var nombre = document.getElementById("profesorInput").value;
+        var escuela = escuelaSeleccionada;
+        var departamento = departamentoSeleccionado;
+        var tipoActividad = document.getElementById("tipo-actividad-inv").value;
+        var categoria = document.getElementById("categoria-inv").value;
+        var nombreActividad = row.querySelector('input[type="text"]').value;
+        var numeroHoras = row.querySelector('input[type="number"]').value;
+
+        google.script.run.withSuccessHandler(function() {
+            hideLoading();
+            $('#successModal').modal('show');
+            $('#successModal').on('hidden.bs.modal', function () {
+                cargarAsignacionesInvestigacion();
+            });
+
+            row.style.backgroundColor = "#f2f2f2";
+            var inputs = row.querySelectorAll('input, select');
+            inputs.forEach(function(input) {
+                input.disabled = true;
+            });
+
+        }).enviarDatos(cedula, nombre, escuela, departamento, tipoActividad, categoria, nombreActividad, numeroHoras);
+    }
+
+    function cargarAsignacionesInvestigacion(asignaciones) {
+        var tbody = document.getElementById("body-actividad-compl"); // Asegúrate de tener el ID correcto de tu tbody
+        tbody.innerHTML = ""; // Limpiar la tabla antes de agregar las nuevas filas
+
+        if (asignaciones.length === 0) {
+            var noDataRow = "<tr><td colspan='4'>No hay datos disponibles</td></tr>";
+            tbody.innerHTML = noDataRow;
+            return;
+        }
+
+        // Crear las filas con datos y botones de acción
+        asignaciones.forEach(function(asignacion) {
+          var row = `
+            <tr>
+            <td>${asignacion.id}</td>
+            <td>${asignacion.categoria}</td>
+            <td>
+              <input type="text" value="${asignacion.nombreActividad}" style="width: 100%;" disabled>
+            </td>
+            <td>
+              <input type="number" value="${asignacion.numeroHoras}"  disabled>
+            </td>
+              <td>
+                <i class="fas fa-edit" style="color: blue; cursor: pointer;" onclick="habilitarEdicion(this)"></i>
+                <i class="fas fa-save" style="color: green; cursor: pointer;" onclick="guardarEdicion(this)"></i>
+                <i class="fas fa-trash" style="color: red; cursor: pointer;" onclick="eliminarFila(this)"></i>
+              </td>
+            </tr>`;
+          
+          tbody.innerHTML += row; // Agregar la fila al tbody.
+        });
+
+
+
+        // Calcular el total de horas y actualizar el texto en la tabla
+        var totalHoras = asignaciones.reduce((total, asignacion) => total + Number(asignacion.numeroHoras), 0);
+        document.getElementById("total-horas-compl").textContent = totalHoras;
+    }
+
+    function habilitarEdicion(button, id) {
+        var row = button.closest('tr');  // Encuentra la fila donde está el botón
+
+        // Habilita los campos de entrada (nombre de la actividad y número de horas) para edición
+        var inputs = row.querySelectorAll('input');
+        inputs.forEach(function(input) {
+            input.disabled = false;  // Habilita los campos para que el usuario pueda editarlos
+        });
+
+        // Oculta el botón de edición y muestra el botón de guardar
+        button.style.display = 'none';  // Oculta el botón de edición (ícono de lápiz)
+        row.querySelector('.fa-save').style.display = 'inline-block';  // Muestra el botón de guardar (ícono de guardar)
+
+        console.log("Editando la asignación con ID:", id);
+    }
+
+
+    function guardarEdicion(button, id) {
+        var row = button.closest('tr');  // Encuentra la fila donde está el botón
+
+        // Obtén los datos de las celdas de esa fila
+        var nombreActividad = row.querySelector('input[type="text"]').value;
+        var numeroHoras = row.querySelector('input[type="number"]').value;
+
+        // Log para verificar los datos que se están enviando
+        console.log("Datos a enviar para el ID: ", id);
+        console.log("Nombre de la actividad: ", nombreActividad);
+        console.log("Número de horas: ", numeroHoras);
+
+        // Llamar a la función de Google Apps Script para guardar los cambios en Google Sheets
+        google.script.run.withSuccessHandler(function() {
+            console.log('Cambios guardados exitosamente para el ID:', id);  // Confirmación de éxito
+
+            // Deshabilita los campos de nuevo después de guardar
+            var inputs = row.querySelectorAll('input');
+            inputs.forEach(function(input) {
+                input.disabled = true;
+            });
+
+            button.style.display = 'none';  // Oculta el botón de guardar
+            row.querySelector('.fa-edit').style.display = 'inline-block';  // Vuelve a mostrar el botón de editar
+        }).editarAsignacion(id, nombreActividad, numeroHoras, periodoActual);  // Asegúrate de pasar los parámetros correctos
+    }
+
+
+    function eliminarFila(button, id) {
+        var row = button.closest('tr');  // Encuentra la fila donde está el botón
+
+        console.log("Intentando eliminar fila con ID:", id);  // Verifica el ID que estás enviando
+
+        // Llama a la función Apps Script para eliminar
+        google.script.run.withSuccessHandler(function(success) {
+            if (success) {
+                row.remove();  // Elimina la fila del DOM si se eliminó en la hoja de cálculo
+                console.log('Asignación eliminada correctamente para el ID:', id);
+            } else {
+                console.error('No se pudo eliminar la asignación. Verifica que el ID sea correcto.');
+                alert('Error: No se pudo eliminar la asignación. Verifica el ID.');
+            }
+        }).eliminarAsignacion(id);  // Solo envía el ID
+    }
+
+
+
+    function cargarCategoriasInvestigacion() {
+        var categoriaSelect = document.getElementById("categoria-inv");
+        var options = ["Sin Categorización", "No Aplica"];
+
+        categoriaSelect.innerHTML = "";
+        var initialOption = document.createElement("option");
+        initialOption.value = "";
+        initialOption.disabled = true;
+        initialOption.selected = true;
+        initialOption.textContent = "Seleccionar Categoría";
+        categoriaSelect.appendChild(initialOption);
+
+        options.forEach(function(option) {
+            var optionElement = document.createElement("option");
+            optionElement.value = option;
+            optionElement.text = option;
+            categoriaSelect.add(optionElement);
+        });
+    }
+
+function enviarDatos(button) {
+        // Obtener la fila padre del botón que desencadenó el evento
+        var row = button.closest('.row');
+
+        // Validar campos dentro de la fila antes de enviar los datos
+        var inputs = row.querySelectorAll('input[required]');
+        var select = row.querySelector('select[required]');
+        var isValid = true;
+
+        inputs.forEach(function(input) {
+          if (input.value.trim() === '') {
+            isValid = false;
+            input.style.border = '1px solid red';
+          } else {
+            input.style.border = '';
+          }
+        });
+
+        // Validar el select
+        if (select && select.value.trim() === '') {
+          isValid = false;
+          select.style.border = '1px solid red';
+        } else {
+          select.style.border = '';
+        }
+
+        if (!isValid) {
+          $('#warningModal').modal('show');
+          return;
+        }
+
+        showLoading();
+
+        // Obtener los datos de la fila
+        var cedula = cedulaSeleccionada;
+        var nombre = document.getElementById("profesorInput").value;
+        var escuela = escuelaSeleccionada;
+        var departamento = departamentoSeleccionado;
+        var tipoActividad = obtenerTipoActividadSeleccionada();
+        var categoria = row.querySelector('select').value;
+        var nombreActividad = row.querySelector('input[type="text"]').value;
+        var numeroHoras = row.querySelector('input[type="number"]').value;
+
+        var tipoActividadHoja;
+        switch (tipoActividad) {
+          case "actividad-ext":
+            tipoActividadHoja = "Actividad de Extensión";
+            break;
+          case "actividades-int":
+            tipoActividadHoja = "Actividades Intelectuales";
+            break;
+          case "actividades-adm":
+            tipoActividadHoja = "Actividades Administrativas";
+            break;
+          case "actividad-compl":
+            tipoActividadHoja = "Actividad Complementaria";
+            break;
+          case "actividad-doc":
+            tipoActividadHoja = "Actividades de Docencia";
+            break;
+          case "actividad-comi":
+            tipoActividadHoja = "Comisión";
+            break;
+          default:
+            console.error("Tipo de actividad no reconocido:", tipoActividad);
+            return;
+        }
+
+        google.script.run.withSuccessHandler(function() {
+          hideLoading();
+
+          $('#successModal').modal('show');
+
+          $(document).ready(function() {
+              $('#successModal').on('hidden.bs.modal', function () {
+                  cargarResumen(nombre);
+                  cargarAsignacionesOnTabChange();
+              });
+          });
+
+          // Marcar el row en gris
+          row.style.backgroundColor = "#f2f2f2";
+
+          // Bloquear los campos
+          var inputs = row.querySelectorAll('input, select');
+          inputs.forEach(function(input) {
+            input.disabled = true;
+          });
+
+          // Actualizar las asignaciones
+          //console.log("hihi",obtenerAsignaciones(nombre, tipoActividad));
+        }).enviarDatos(cedula, nombre, escuela, departamento, tipoActividadHoja, categoria, nombreActividad, numeroHoras);
+    };
+
+
+    function mostrarForm() {
+      document.getElementById("formulario-form-group").style.display = "block";
+    }
+  </script>
+</body>
+</html>

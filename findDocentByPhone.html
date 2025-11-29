@@ -1,0 +1,2162 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Consulta de Docente</title>
+  <base target="_top">
+  <!-- Bootstrap CSS -->
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <!-- Bootstrap Icons -->
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.10.0/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+  :root {
+    --primary-color: #d50000; /* Rojo Univalle */
+    --primary-color-dark: #b40000;
+    --text-light: #fff;
+    --background-light: #f8f9fa;
+    --border-color: #dee2e6;
+  }
+
+  body {
+    font-family: 'Segoe UI', Roboto, Arial, sans-serif;
+    padding: 20px;
+    background-color: var(--background-light);
+    color: #333;
+  }
+
+  /* --- Sección de Búsqueda --- */
+  .input-container {
+    max-width: 500px;
+    margin: 0 auto 30px auto;
+    text-align: center;
+    background: #fff;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  }
+
+  .input-container label {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #555;
+    margin-bottom: 15px;
+    display: block;
+  }
+
+  .input-container input {
+    width: 100%;
+    padding: 12px;
+    font-size: 1rem;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    margin-bottom: 15px;
+  }
+
+  button#buscarBtn {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    border: none;
+    border-radius: 8px;
+    background: var(--primary-color);
+    color: var(--text-light);
+    padding: 12px 20px;
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.3s, transform 0.2s;
+  }
+
+  button#buscarBtn:hover {
+    background: var(--primary-color-dark);
+    transform: translateY(-2px);
+  }
+
+  button#buscarBtn:active {
+    transform: translateY(0);
+  }
+
+  /* --- Loader / Mensaje Central --- */
+  #message-container {
+    text-align: center;
+    margin: 40px 0;
+  }
+
+  #message-container h3 {
+    font-size: 1.25rem;
+    color: var(--primary-color);
+    animation: pulse 1.5s infinite ease-in-out;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.02); }
+  }
+
+  /* --- Tarjeta de Información Personal --- */
+  #personal-info-container .card {
+    max-width: 95%;
+    margin: 0 auto 30px auto;
+    border: none;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+
+  /* --- Switch de Vista --- */
+  .view-switch-container {
+    max-width: 95%;
+    margin: 0 0 30px auto;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .view-switch-container label {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #555;
+  }
+
+  .switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
+  }
+
+  .switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: .4s;
+    border-radius: 34px;
+  }
+
+  .slider:before {
+    position: absolute;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: .4s;
+    border-radius: 50%;
+  }
+
+  input:checked + .slider {
+    background-color: var(--primary-color);
+  }
+
+  input:checked + .slider:before {
+    transform: translateX(26px);
+  }
+  
+  #personal-info-container .card-header {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+    font-size: 1.2rem;
+    font-weight: 500;
+    padding: 15px 20px;
+    display: flex;
+    align-items: center;
+  }
+
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px 25px;
+    padding: 20px;
+  }
+
+  @media (min-width: 1200px) {
+    .info-grid {
+      grid-template-columns: repeat(5, 1fr);
+    }
+  }
+
+  @media (min-width: 900px) and (max-width: 1199px) {
+    .info-grid {
+      grid-template-columns: repeat(4, 1fr);
+    }
+  }
+
+  @media (min-width: 600px) and (max-width: 899px) {
+    .info-grid {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  .info-item {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .info-item .label {
+    font-size: 0.85rem;
+    color: #6c757d;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .info-item .value {
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: #343a40;
+  }
+
+  /* --- Tabla de Encabezados Fija --- */
+  .headers-table-container {
+    max-width: 95%;
+    margin: 0 auto 20px auto;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    overflow: hidden;
+  }
+
+  .headers-table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .headers-table th {
+    background-color: var(--primary-color);
+    color: var(--text-light);
+    font-weight: 600;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    padding: 12px 8px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.2);
+  }
+
+  /* Anchos específicos para las columnas del encabezado */
+  .headers-table th:nth-child(1) { width: 8%; }  /* CODIGO */
+  .headers-table th:nth-child(2) { width: 6%; }  /* GRUPO */
+  .headers-table th:nth-child(3) { width: 10%; } /* TIPO */
+  .headers-table th:nth-child(4) { width: 35%; } /* NOMBRE DE ASIGNATURA */
+  .headers-table th:nth-child(5) { width: 6%; }  /* CRED */
+  .headers-table th:nth-child(6) { width: 8%; }  /* PORC */
+  .headers-table th:nth-child(7) { width: 8%; }  /* FREC */
+  .headers-table th:nth-child(8) { width: 8%; }  /* INTEN */
+  .headers-table th:nth-child(9) { width: 11%; } /* HORAS SEMESTRE */
+
+  /* --- Contenedor de Resultados por Período --- */
+  #results .periodo-card {
+    max-width: 95%;
+    margin: 0 auto 20px auto;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    overflow: hidden;
+  }
+
+  .periodo-card .card-header {
+    background-color: #f1f1f1;
+    color: #333;
+    font-weight: 600;
+    font-size: 1.2rem;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--border-color);
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .periodo-card .card-header:hover {
+    background-color: #e9ecef;
+  }
+
+  .periodo-card .card-header .toggle-icon {
+    transition: transform 0.3s;
+  }
+
+  .periodo-card.collapsed .card-header .toggle-icon {
+    transform: rotate(-90deg);
+  }
+
+  .periodo-card .card-body {
+    display: block;
+    transition: all 0.3s ease;
+  }
+
+  .periodo-card.collapsed .card-body {
+    display: none;
+  }
+
+  /* --- Categorías de Actividades Desplegables --- */
+  .categoria-section {
+    margin-bottom: 20px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+
+  .categoria-header {
+    background-color: #e3f2fd;
+    color: #1976d2;
+      font-weight: 600;
+    font-size: 1rem;
+    padding: 12px 20px;
+    cursor: pointer;
+    transition: background-color 0.3s;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid #1976d2;
+  }
+
+  .categoria-header:hover {
+    background-color: #bbdefb;
+  }
+
+  .categoria-header .toggle-icon {
+    transition: transform 0.3s;
+  }
+
+  .categoria-section.collapsed .categoria-header .toggle-icon {
+    transform: rotate(-90deg);
+  }
+
+  .categoria-content {
+    display: block;
+    transition: all 0.3s ease;
+  }
+
+  .categoria-section.collapsed .categoria-content {
+    display: none;
+  }
+
+  /* --- Tabla de Actividades --- */
+  .actividades-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 0;
+    table-layout: auto; /* Cambiar a auto para manejar columnas dinámicas */
+  }
+
+    .actividades-table th {
+    background-color: #f8f9fa;
+    color: #495057;
+    font-weight: 600;
+    font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    padding: 8px 4px;
+    text-align: center;
+    border: 1px solid var(--border-color);
+    white-space: nowrap;
+  }
+
+  .actividades-table td {
+    padding: 6px 4px;
+    font-size: 0.85rem;
+    border: 1px solid var(--border-color);
+    vertical-align: top;
+    word-wrap: break-word;
+    max-width: 150px; /* Limitar ancho máximo de celdas */
+  }
+
+  /* Estilos específicos para columnas de datos */
+  .actividades-table td:nth-child(1) { /* CATEGORÍA */
+    width: 120px;
+    text-align: center;
+  }
+
+  /* Columnas de códigos y grupos - más compactas */
+  .actividades-table th:contains("CODIGO"),
+  .actividades-table th:contains("GRUPO"),
+  .actividades-table th:contains("CRED"),
+  .actividades-table th:contains("PORC"),
+  .actividades-table th:contains("FREC"),
+  .actividades-table th:contains("INTEN") {
+    width: 60px;
+    text-align: center;
+  }
+
+  /* Columnas de tipo */
+  .actividades-table th:contains("TIPO") {
+    width: 80px;
+    text-align: center;
+  }
+
+  /* Columnas de horas */
+  .actividades-table th:contains("HORAS SEMESTRE") {
+    width: 90px;
+    text-align: center;
+  }
+
+  /* Columnas de texto largo */
+  .actividades-table th:contains("NOMBRE DE ASIGNATURA"),
+  .actividades-table th:contains("TITULO DE LA TESIS") {
+    min-width: 180px;
+    text-align: left;
+  }
+
+  .actividades-table .badge {
+    font-size: 0.75rem;
+    padding: 4px 6px;
+  }
+
+  /* Badges de totales - tonos sobrios y discretos */
+  .total-badge {
+    background-color: #787c81; /* Gris oscuro para totales generales */
+    color: white;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-size: 0.9rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+
+  /* Badge para totales de sección (nivel intermedio) */
+  .total-badge-section {
+    background-color: #aab0b4; /* Gris medio */
+    color: white;
+    font-weight: 600;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 0.85rem;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+
+  /* Badge para totales de categoría (nivel menor) */
+  .total-badge-category {
+    background-color: #aab0b4; /* Gris más claro */
+    color: white;
+    font-weight: 500;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+  }
+
+  /* Filas de totales - tonos sobrios */
+  .total-row {
+    background-color: #e9ecef !important; /* Gris muy claro */
+    font-weight: 600;
+    color: #495057; /* Texto gris oscuro */
+    border-top: 2px solid #6c757d !important; /* Borde gris */
+    border-bottom: 2px solid #6c757d !important; /* Borde gris */
+  }
+
+  .total-row td {
+    color: #495057 !important;
+    font-size: 0.95rem;
+  }
+
+  .total-row strong {
+    color: #212529 !important; /* Texto casi negro para "TOTAL" */
+    font-size: 1rem;
+  }
+
+  /* Mensaje tabla vacía */
+  .tabla-vacia {
+    font-style: italic;
+    color: #666;
+    padding: 20px;
+    text-align: center;
+    background-color: #fafafa;
+    border-radius: 8px;
+    margin: 10px 0;
+  }
+
+  /* Utilidad para ocultar */
+  .display-none {
+    display: none !important;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .headers-table th,
+    .actividades-table td {
+      font-size: 0.75rem;
+      padding: 6px 4px;
+    }
+    
+    .headers-table,
+    .actividades-table {
+      table-layout: auto;
+    }
+  }
+
+  /* Responsive para tablas con muchas columnas */
+  @media (max-width: 1200px) {
+    .actividades-table {
+      font-size: 0.8rem;
+    }
+    
+    .actividades-table th,
+    .actividades-table td {
+      padding: 6px 4px;
+    }
+  }
+
+  @media (max-width: 768px) {
+    .actividades-table {
+      font-size: 0.75rem;
+    }
+    
+    .actividades-table th,
+    .actividades-table td {
+      padding: 4px 2px;
+    }
+    
+    .actividades-table td {
+      max-width: 150px;
+    }
+  }
+</style>
+</head>
+<body>
+  <!-- SECCIÓN DE ENTRADA -->
+  <div class="input-container" id="input-section">
+    <label for="cedulaInput">Consultar actividades de docente</label>
+    <input type="text" id="cedulaInput" class="form-control" placeholder="Ingrese la cédula del docente">
+    <button id="buscarBtn"><i class="bi bi-search"></i>&nbsp;Buscar Docente</button>
+  </div>
+
+  <!-- CONTENEDOR PARA MENSAJES Y LOADER -->
+  <div id="message-container" class="display-none"></div>
+
+  <!-- CONTENEDOR PARA LA TARJETA DE INFORMACIÓN PERSONAL -->
+  <div id="personal-info-container"></div>
+
+  <!-- SWITCH DE VISTA -->
+  <div id="view-switch-container" class="view-switch-container display-none">
+    <label>Por Periodo</label>
+    <label class="switch">
+      <input type="checkbox" id="viewToggle">
+      <span class="slider"></span>
+    </label>
+    <label>Por Actividad</label>
+  </div>
+
+  <!-- TABLA DE ENCABEZADOS FIJA -->
+  <div id="headers-table-container" class="headers-table-container display-none">
+    <table class="headers-table">
+      <thead>
+        <tr>
+          <th>CODIGO</th>
+          <th>GRUPO</th>
+          <th>TIPO</th>
+          <th>NOMBRE DE ASIGNATURA</th>
+          <th>CRED</th>
+          <th>PORC</th>
+          <th>FREC</th>
+          <th>INTEN</th>
+          <th>HORAS SEMESTRE</th>
+        </tr>
+      </thead>
+    </table>
+  </div>
+
+  <!-- CONTENEDOR PARA LOS RESULTADOS (TABLAS POR PERÍODO) -->
+  <div id="results"></div>
+
+<script>
+  // --- FUNCIONES DE ANIMACIÓN ---
+  function startDotsAnimation(element) {
+    let dotCount = 0;
+    const intervalId = setInterval(() => {
+      dotCount = (dotCount + 1) % 4;
+      element.textContent = ".".repeat(dotCount);
+    }, 500);
+    element.dataset.intervalId = intervalId;
+  }
+
+  function stopDotsAnimation(element) {
+    const id = element.dataset.intervalId;
+    if (id) {
+      clearInterval(id);
+      delete element.dataset.intervalId;
+    }
+  }
+
+  // --- ELEMENTOS DEL DOM ---
+  const inputSection = document.getElementById('input-section');
+  const buscarBtn = document.getElementById('buscarBtn');
+  const cedulaInput = document.getElementById('cedulaInput');
+  const messageContainer = document.getElementById('message-container');
+  const resultsContainer = document.getElementById('results');
+  const personalInfoContainer = document.getElementById('personal-info-container');
+  const headersTableContainer = document.getElementById('headers-table-container');
+  const viewSwitchContainer = document.getElementById('view-switch-container');
+  const viewToggle = document.getElementById('viewToggle');
+
+  // --- CONSTANTES ---
+  let PERIODOS_NOMBRES = {};
+  let PERIODOS = [];
+
+  function cargarPeriodos() {
+    google.script.run
+      .withSuccessHandler(function(periodos) {
+        PERIODOS = periodos.map(p => p.idPeriod);
+        PERIODOS_NOMBRES = {};
+        periodos.forEach(p => {
+          PERIODOS_NOMBRES[String(p.idPeriod)] = p.label;
+        });
+        console.log('Periodos cargados:', PERIODOS_NOMBRES);
+      })
+      .withFailureHandler(function(err) {
+        console.error('Error cargando periodos, usando fallback estático', err);
+        PERIODOS_NOMBRES = {
+          '48': '2025-1',
+          '47': '2024-2',
+          '46': '2024-1',
+          '45': '2023-2',
+          '44': '2023-1'
+        };
+        PERIODOS = [48, 47, 46, 45, 44];
+      })
+      .getUltimosPeriodos(8);
+  }
+
+window.addEventListener('load', cargarPeriodos);
+
+  // Orden de columnas según el encabezado fijo
+  const COLUMNAS_ORDEN = ['CODIGO', 'GRUPO', 'TIPO', 'NOMBRE DE ASIGNATURA', 'CRED', 'PORC', 'FREC', 'INTEN', 'HORAS SEMESTRE'];
+
+  // Estructuras específicas para diferentes tipos de actividades
+  const ESTRUCTURA_PREGRADO_POSTGRADO = ['CODIGO', 'GRUPO', 'TIPO', 'NOMBRE DE ASIGNATURA', 'CRED', 'PORC', 'FREC', 'INTEN', 'HORAS SEMESTRE'];
+  const ESTRUCTURA_TESIS = ['CODIGO ESTUDIANTE', 'COD PLAN', 'TITULO DE LA TESIS', 'HORAS SEMESTRE'];
+
+  // Variables globales
+  let personalInfoRendered = false;
+  let storedPersonalInfo = null;
+  let datosGlobalesConsolidados = null;
+  let resultadosGlobales = null;
+
+  // --- FUNCIONES AUXILIARES ---
+  function extraerHorasSemestre(valor) {
+    if (!valor || valor === '–' || valor === '') return 0;
+    const num = parseFloat(valor.toString().replace(/[^\d.]/g, ''));
+    return isNaN(num) ? 0 : num;
+  }
+
+  function combinarNombreCompleto(info) {
+    if (!info || typeof info !== 'object') return 'No disponible';
+    
+    // Priorizar NOMBRE COMPLETO si existe
+    if (info['NOMBRE COMPLETO']) {
+      return info['NOMBRE COMPLETO'];
+    }
+    
+    const apellido1 = info['1 APELLIDO'] || info['APELLIDO1'] || '';
+    const apellido2 = info['2 APELLIDO'] || info['APELLIDO2'] || '';
+    const nombre = info['NOMBRE'] || '';
+    
+    const nombreCompleto = `${nombre} ${apellido1} ${apellido2}`.trim().replace(/\s+/g, ' ');
+    return nombreCompleto || 'No disponible';
+  }
+
+  function mapearColumna(nombreOriginal) {
+    const mapeo = {
+      // Docencia
+      'CODIGO': 'CODIGO',
+      'GRUPO': 'GRUPO',
+      'TIPO': 'TIPO',
+      'NOMBRE DE ASIGNATURA': 'NOMBRE DE ASIGNATURA',
+      'CRED': 'CRED',
+      'PORC': 'PORC',
+      'FREC': 'FREC',
+      'INTEN': 'INTEN',
+      // Tesis
+      'CODIGO ESTUDIANTE': 'CODIGO ESTUDIANTE',
+      'COD PLAN': 'COD PLAN',
+      'TITULO DE LA TESIS': 'TITULO DE LA TESIS',
+      // Investigación
+      'NOMBRE DEL PROYECTO DE INVESTIGACION': 'NOMBRE DEL PROYECTO DE INVESTIGACION',
+      // Extensión / Intelectuales / Complementarias
+      'NOMBRE': 'NOMBRE',
+      // Intelectuales
+      'APROBADO POR': 'APROBADO POR',
+      // Complementarias
+      'PARTICIPACION EN:': 'PARTICIPACION EN',
+      'PARTICIPACION EN': 'PARTICIPACION EN',
+      // Administrativas
+      'CARGO': 'CARGO',
+      'DESCRIPCION DEL CARGO': 'DESCRIPCION DEL CARGO',
+      // Comisión
+      'TIPO DE COMISION:': 'TIPO DE COMISION',
+      'TIPO DE COMISION': 'TIPO DE COMISION',
+      'DESCRIPCION': 'DESCRIPCION',
+      // Comunes
+      'HORAS SEMESTRE': 'HORAS SEMESTRE',
+      'NUMERO DE HORAS': 'HORAS SEMESTRE'
+    };
+    
+    const nombreUpper = nombreOriginal.toUpperCase().trim();
+    
+    // Buscar coincidencia exacta
+    if (mapeo[nombreUpper]) {
+      return mapeo[nombreUpper];
+    }
+    
+    // Mapeo flexible para variaciones
+    if (nombreUpper.includes("PROYECTO DE INVESTIGACION")) return "NOMBRE DEL PROYECTO DE INVESTIGACION";
+    
+    return nombreOriginal;
+  }
+
+  // Función para determinar el tipo de actividad y sus columnas correspondientes
+  function obtenerEstructuraActividad(item, categoriaTipo) {
+    // Si es dirección de tesis, usar estructura específica
+    if (categoriaTipo && categoriaTipo.toLowerCase().includes('direccion')) {
+      return ESTRUCTURA_TESIS;
+    }
+    
+    // Si tiene campos específicos de tesis, usar estructura de tesis
+    if (item['CODIGO ESTUDIANTE'] || item['TITULO DE LA TESIS']) {
+      return ESTRUCTURA_TESIS;
+    }
+    
+    // Por defecto, usar estructura de pregrado/postgrado
+    return ESTRUCTURA_PREGRADO_POSTGRADO;
+  }
+
+  // Función para obtener el valor de una columna específica
+  function obtenerValorColumna(item, columna) {
+    // Buscar coincidencia exacta primero
+    if (item[columna] !== undefined) {
+      return item[columna];
+    }
+    
+    // Buscar por mapeo de columnas
+    for (const [key, val] of Object.entries(item)) {
+      const keyMapeado = mapearColumna(key);
+      if (keyMapeado === columna) {
+        return val;
+      }
+    }
+    
+    // Debug: Si no se encuentra la columna, loggear para debug
+    console.log(`Columna '${columna}' no encontrada en item:`, Object.keys(item));
+    
+    return '–';
+  }
+
+  // Función para obtener las columnas específicas según el tipo de actividad
+  function obtenerColumnasPorTipo(tipoActividad) {
+    const estructuras = {
+      'pregrado': ['CODIGO', 'GRUPO', 'TIPO', 'NOMBRE DE ASIGNATURA', 'CRED', 'PORC', 'FREC', 'INTEN', 'HORAS SEMESTRE'],
+      'postgrado': ['CODIGO', 'GRUPO', 'TIPO', 'NOMBRE DE ASIGNATURA', 'CRED', 'PORC', 'FREC', 'INTEN', 'HORAS SEMESTRE'],
+      'direcciondetesis': ['CODIGO ESTUDIANTE', 'COD PLAN', 'TITULO DE LA TESIS', 'HORAS SEMESTRE'],
+      'actividadesdeinvestigacion': ['CODIGO', 'NOMBRE DEL PROYECTO DE INVESTIGACION', 'HORAS SEMESTRE'],
+      'actividadesdeextension': ['TIPO', 'NOMBRE', 'HORAS SEMESTRE'],
+      'actividadesintelectualesoartisticas': ['APROBADO POR', 'TIPO', 'NOMBRE', 'HORAS SEMESTRE'],
+      'actividadesadministrativas': ['CARGO', 'DESCRIPCION DEL CARGO', 'HORAS SEMESTRE'],
+      'actividadescomplementarias': ['PARTICIPACION EN', 'NOMBRE', 'HORAS SEMESTRE'],
+      'docenteencomision': ['TIPO DE COMISION', 'DESCRIPCION', 'HORAS SEMESTRE']
+    };
+    
+    // Normalizar el tipo de actividad para buscar en el mapeo
+    const tipoNormalizado = tipoActividad.toLowerCase().replace(/[^a-z]/g, '');
+    console.log(`Buscando columnas para: ${tipoActividad} -> normalizado: ${tipoNormalizado}`);
+    
+    // Buscar coincidencias exactas primero
+    if (estructuras[tipoNormalizado]) {
+      console.log(`Encontrado exacto: ${tipoNormalizado}`, estructuras[tipoNormalizado]);
+      return estructuras[tipoNormalizado];
+    }
+    
+    // Buscar coincidencias parciales
+    for (const [key, value] of Object.entries(estructuras)) {
+      if (tipoNormalizado.includes(key) || key.includes(tipoNormalizado)) {
+        console.log(`Encontrado parcial: ${key}`, value);
+        return value;
+      }
+    }
+    
+    console.log(`No encontrado, usando default para: ${tipoActividad}`);
+    return ['CODIGO', 'NOMBRE', 'HORAS SEMESTRE'];
+  }
+
+  // Función para normalizar nombres de categorías similares
+  function normalizarCategoria(categoria) {
+    const normalizado = categoria.toLowerCase().trim();
+    
+    // Mapeo de categorías similares
+    if (normalizado.includes('pregrado')) return 'Pregrado';
+    if (normalizado.includes('postgrado') || normalizado.includes('posgrado')) return 'Postgrado';
+    if (normalizado.includes('direccion') || normalizado.includes('dirección') || normalizado.includes('tesis')) return 'Dirección de Tesis';
+    if (normalizado.includes('maestria') || normalizado.includes('maestría')) return 'Postgrado';
+    if (normalizado.includes('doctorado')) return 'Postgrado';
+    
+    // Retornar capitalizado
+    return categoria.charAt(0).toUpperCase() + categoria.slice(1).toLowerCase();
+  }
+
+  // --- FUNCIÓN PARA CONSOLIDAR DATOS ---
+  function consolidarDatosPorCategoria(results) {
+    const consolidado = {
+      pregrado: {},
+      postgrado: {},
+      direccionTesis: {},
+      actividadesInvestigacion: {},
+      actividadesExtension: {},
+      actividadesIntelectualesOArtisticas: {},
+      actividadesAdministrativas: {},
+      actividadesComplementarias: {},
+      docenteEnComision: {}
+    };
+    
+    results.forEach(res => {
+      if (res.error || !res.data || res.data.length === 0) return;
+      
+      const periodo = res.periodo;
+      const filaObj = res.data[0];
+      
+      // Consolidar actividades de docencia
+      if (filaObj.actividadesDocencia) {
+        if (filaObj.actividadesDocencia.pregrado) {
+          consolidado.pregrado[periodo] = filaObj.actividadesDocencia.pregrado;
+        }
+        if (filaObj.actividadesDocencia.postgrado) {
+          consolidado.postgrado[periodo] = filaObj.actividadesDocencia.postgrado;
+        }
+        if (filaObj.actividadesDocencia.direccionTesis) {
+          consolidado.direccionTesis[periodo] = filaObj.actividadesDocencia.direccionTesis;
+        }
+      }
+      
+      // Consolidar otras actividades
+      const otrasActividades = [
+        'actividadesInvestigacion',
+        'actividadesExtension',
+        'actividadesIntelectualesOArtisticas',
+        'actividadesAdministrativas',
+        'actividadesComplementarias',
+        'docenteEnComision'
+      ];
+      
+      otrasActividades.forEach(key => {
+        if (filaObj[key] && Array.isArray(filaObj[key]) && filaObj[key].length > 0) {
+          consolidado[key][periodo] = filaObj[key];
+        }
+      });
+    });
+    
+    return consolidado;
+  }
+
+  // --- MANEJADORES DE EVENTOS ---
+  buscarBtn.addEventListener('click', function() {
+    const cedula = cedulaInput.value.trim();
+    if (!cedula) {
+      alert('Por favor, ingrese una cédula válida.');
+      return;
+    }
+    
+    // Reset de contenedores y flags
+    inputSection.classList.add('display-none');
+    resultsContainer.innerHTML = '';
+    personalInfoContainer.innerHTML = '';
+    headersTableContainer.classList.add('display-none');
+    viewSwitchContainer.classList.add('display-none');
+    personalInfoRendered = false;
+    storedPersonalInfo = null;
+    datosGlobalesConsolidados = null;
+    resultadosGlobales = null;
+
+    // Mostrar loader / mensaje
+    messageContainer.classList.remove('display-none');
+    messageContainer.innerHTML = `
+      <div class="loader">
+        <h3>Procesando información<span id="dots"></span></h3>
+      </div>`;
+    const dotsEl = messageContainer.querySelector('#dots');
+    if (dotsEl) startDotsAnimation(dotsEl);
+
+    // Función que envuelve google.script.run en una promesa
+    function fetchPeriodo(cedula, periodo) {
+      return new Promise((resolve) => {
+        google.script.run
+          .withSuccessHandler(function(data) {
+            resolve({ periodo, data, error: null });
+          })
+          .withFailureHandler(function(err) {
+            resolve({ periodo, data: null, error: err });
+          })
+          .extraerDatosDocenteUnivalle(cedula, periodo);
+      });
+    }
+
+    // Crear array de promesas con map
+    const fetchPromises = PERIODOS.map(periodo => fetchPeriodo(cedula, periodo));
+
+    // Esperar todas y consolidar datos
+    Promise.all(fetchPromises).then(results => {
+      // Ordenar según el orden en PERIODOS
+      results.sort((a, b) => PERIODOS.indexOf(a.periodo) - PERIODOS.indexOf(b.periodo));
+
+      // Consolidar todas las actividades por categoría
+      const datosConsolidados = consolidarDatosPorCategoria(results);
+
+      // Guardar datos globalmente para poder cambiar la vista
+      datosGlobalesConsolidados = datosConsolidados;
+      resultadosGlobales = results;
+
+      // Renderizar info personal (solo una vez)
+      results.forEach(res => {
+        if (!personalInfoRendered && !res.error && res.data && res.data.length > 0 && res.data[0].informacionPersonal) {
+          storedPersonalInfo = res.data[0].informacionPersonal;
+          renderPersonalInfo(storedPersonalInfo);
+          personalInfoRendered = true;
+        }
+      });
+
+      // Mostrar el switch de vista
+      viewSwitchContainer.classList.remove('display-none');
+
+      // Renderizar según el modo actual del toggle
+      renderizarSegunVista();
+
+      finalizarProcesamiento();
+    });
+  });
+
+  cedulaInput.addEventListener('keyup', function(event) {
+    if (event.key === 'Enter') {
+      buscarBtn.click();
+    }
+  });
+
+  // Event listener para cambiar la vista
+  viewToggle.addEventListener('change', function() {
+    renderizarSegunVista();
+  });
+
+  function finalizarProcesamiento() {
+    const dotsEl = messageContainer.querySelector('#dots');
+    if (dotsEl) stopDotsAnimation(dotsEl);
+
+    setTimeout(() => {
+      messageContainer.classList.add('display-none');
+      // Permitir nueva búsqueda:
+      inputSection.classList.remove('display-none');
+    }, 500);
+  }
+
+  // Función para renderizar según el estado del toggle
+  function renderizarSegunVista() {
+    if (!resultadosGlobales || !datosGlobalesConsolidados) return;
+
+    // Limpiar contenedor de resultados
+    resultsContainer.innerHTML = '';
+
+    if (viewToggle.checked) {
+      // Vista por actividad
+      renderizarPorActividad(resultadosGlobales, datosGlobalesConsolidados);
+    } else {
+      // Vista por periodo
+      renderizarPorPeriodo(resultadosGlobales, datosGlobalesConsolidados);
+    }
+  }
+
+  // Renderizar vista por periodo (jerarquía: Periodo → Actividad → Pregrado/Postgrado/Tesis)
+  function renderizarPorPeriodo(results, datosConsolidados) {
+    results.forEach(res => {
+      const periodo = res.periodo;
+      if (res.error) {
+        renderErrorPeriodo(periodo, res.error);
+      } else {
+        renderTablaPeriodo(periodo, res.data);
+      }
+    });
+  }
+
+  // Renderizar vista por actividad (jerarquía: Actividad → Pregrado/Postgrado/Tesis → Periodo)
+  function renderizarPorActividad(results, datosConsolidados) {
+    // Crear sección para ACTIVIDADES DE DOCENCIA
+    renderActividadDocenciaConPeriodos(datosConsolidados);
+
+    // Crear secciones para otras actividades
+    const otrasActividades = [
+      { key: 'actividadesInvestigacion', name: 'ACTIVIDADES DE INVESTIGACION' },
+      { key: 'actividadesExtension', name: 'ACTIVIDADES DE EXTENSION' },
+      { key: 'actividadesIntelectualesOArtisticas', name: 'ACTIVIDADES INTELECTUALES O ARTISTICAS' },
+      { key: 'actividadesAdministrativas', name: 'ACTIVIDADES ADMINISTRATIVAS' },
+      { key: 'actividadesComplementarias', name: 'ACTIVIDADES COMPLEMENTARIAS' },
+      { key: 'docenteEnComision', name: 'DOCENTE EN COMISION' }
+    ];
+
+    otrasActividades.forEach(({ key, name }) => {
+      renderOtraActividadConPeriodos(datosConsolidados[key], name);
+    });
+  }
+
+  // Vista POR PERIODO: Renderizar un período con sus actividades
+  function renderTablaPeriodo(periodo, data) {
+    if (!Array.isArray(data) || data.length === 0) {
+      renderErrorPeriodo(periodo, 'No hay datos disponibles');
+      return;
+    }
+
+    const filaObj = data[0];
+    let totalHorasPeriodo = 0;
+
+    // Card del período
+    const card = document.createElement('div');
+    card.className = 'card periodo-card collapsed';
+
+    const header = document.createElement('div');
+    header.className = 'card-header';
+
+    header.addEventListener('click', () => {
+      card.classList.toggle('collapsed');
+    });
+
+    card.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    card.appendChild(body);
+
+    let algunaActividad = false;
+
+    // Procesar ACTIVIDADES DE DOCENCIA
+    const horasDocencia = procesarActividadesDocenciaSimple(filaObj.actividadesDocencia, body);
+    totalHorasPeriodo += horasDocencia;
+
+    if (filaObj.actividadesDocencia && Object.keys(filaObj.actividadesDocencia).length > 0) {
+      const tieneActividades = Object.values(filaObj.actividadesDocencia).some(arr =>
+        Array.isArray(arr) && arr.length > 0
+      );
+      if (tieneActividades) {
+        algunaActividad = true;
+      }
+    }
+
+    // Procesar otras actividades
+    const todasLasActividades = [
+      { key: 'actividadesInvestigacion', name: 'ACTIVIDADES DE INVESTIGACION' },
+      { key: 'actividadesExtension', name: 'ACTIVIDADES DE EXTENSION' },
+      { key: 'actividadesIntelectualesOArtisticas', name: 'ACTIVIDADES INTELECTUALES O ARTISTICAS' },
+      { key: 'actividadesAdministrativas', name: 'ACTIVIDADES ADMINISTRATIVAS' },
+      { key: 'actividadesComplementarias', name: 'ACTIVIDADES COMPLEMENTARIAS' },
+      { key: 'docenteEnComision', name: 'DOCENTE EN COMISION' }
+    ];
+
+    todasLasActividades.forEach(({ key, name }) => {
+      const horasActividad = procesarOtraActividad(filaObj[key], name, body);
+      totalHorasPeriodo += horasActividad;
+
+      if (filaObj[key] && Array.isArray(filaObj[key]) && filaObj[key].length > 0) {
+        algunaActividad = true;
+      }
+    });
+
+    if (!algunaActividad) {
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = 'No se encontraron actividades en ninguna categoría.';
+      body.appendChild(msg);
+    }
+
+    // Actualizar header con total del período
+    header.innerHTML = `
+      <span>Período: ${PERIODOS_NOMBRES?.[periodo] || periodo}</span>
+      <div>
+        <span class="total-badge">Total: ${totalHorasPeriodo.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon" style="margin-left: 10px;"></i>
+      </div>
+    `;
+
+    resultsContainer.appendChild(card);
+  }
+
+  // Procesar actividades de docencia (vista simple por periodo)
+  function procesarActividadesDocenciaSimple(actividadesDocencia, container) {
+    let totalHorasDocencia = 0;
+
+    const seccionDocencia = document.createElement('div');
+    seccionDocencia.className = 'categoria-section collapsed';
+
+    const headerDocencia = document.createElement('div');
+    headerDocencia.className = 'categoria-header';
+
+    headerDocencia.addEventListener('click', () => {
+      seccionDocencia.classList.toggle('collapsed');
+    });
+
+    const contentDocencia = document.createElement('div');
+    contentDocencia.className = 'categoria-content';
+
+    if (!actividadesDocencia || Object.keys(actividadesDocencia).length === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = 'No hay actividades de docencia registradas.';
+      contentDocencia.appendChild(msg);
+    } else {
+      const categoriasDocencia = [
+        { key: 'pregrado', name: 'PREGRADO' },
+        { key: 'postgrado', name: 'POSTGRADO' },
+        { key: 'direccionTesis', name: 'DIRECCIÓN DE TESIS' }
+      ];
+
+      categoriasDocencia.forEach(({ key, name }) => {
+        const actividades = actividadesDocencia[key];
+        const horas = procesarCategoriaDocenciaInterna(actividades, name, 'badge-secondary', contentDocencia);
+        totalHorasDocencia += horas;
+      });
+    }
+
+    headerDocencia.innerHTML = `
+      <span>ACTIVIDADES DE DOCENCIA</span>
+      <div>
+        <span class="total-badge-section">Total: ${totalHorasDocencia.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    seccionDocencia.appendChild(headerDocencia);
+    seccionDocencia.appendChild(contentDocencia);
+    container.appendChild(seccionDocencia);
+
+    return totalHorasDocencia;
+  }
+
+  // Vista POR ACTIVIDAD: Renderizar actividades de docencia con periodos dentro
+  function renderActividadDocenciaConPeriodos(datosConsolidados) {
+    let totalGeneral = 0;
+
+    // Sección principal de ACTIVIDADES DE DOCENCIA
+    const seccionDocencia = document.createElement('div');
+    seccionDocencia.className = 'categoria-section collapsed';
+
+    const headerDocencia = document.createElement('div');
+    headerDocencia.className = 'categoria-header';
+
+    headerDocencia.addEventListener('click', () => {
+      seccionDocencia.classList.toggle('collapsed');
+    });
+
+    const contentDocencia = document.createElement('div');
+    contentDocencia.className = 'categoria-content';
+
+    // Procesar cada categoría de docencia
+    const categoriasDocencia = [
+      { key: 'pregrado', name: 'PREGRADO' },
+      { key: 'postgrado', name: 'POSTGRADO' },
+      { key: 'direccionTesis', name: 'DIRECCIÓN DE TESIS' }
+    ];
+
+    categoriasDocencia.forEach(({ key, name }) => {
+      const actividadesPorPeriodo = datosConsolidados[key] || {};
+      const horas = renderCategoriaConPeriodos(actividadesPorPeriodo, name, contentDocencia);
+      totalGeneral += horas;
+    });
+
+    headerDocencia.innerHTML = `
+      <span>ACTIVIDADES DE DOCENCIA</span>
+      <div>
+        <span class="total-badge-section">Total histórico: ${totalGeneral.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    seccionDocencia.appendChild(headerDocencia);
+    seccionDocencia.appendChild(contentDocencia);
+    resultsContainer.appendChild(seccionDocencia);
+  }
+
+  // Vista POR ACTIVIDAD: Renderizar otras actividades con periodos dentro
+  function renderOtraActividadConPeriodos(actividadesPorPeriodo, nombreActividad) {
+    let totalGeneral = 0;
+
+    const seccionActividad = document.createElement('div');
+    seccionActividad.className = 'categoria-section collapsed';
+
+    const headerActividad = document.createElement('div');
+    headerActividad.className = 'categoria-header';
+
+    headerActividad.addEventListener('click', () => {
+      seccionActividad.classList.toggle('collapsed');
+    });
+
+    const contentActividad = document.createElement('div');
+    contentActividad.className = 'categoria-content';
+
+    if (!actividadesPorPeriodo || Object.keys(actividadesPorPeriodo).length === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = 'No hay actividades registradas.';
+      contentActividad.appendChild(msg);
+    } else {
+      // Crear acordeones por período
+      PERIODOS.forEach(periodo => {
+        const actividades = actividadesPorPeriodo[periodo];
+        if (!actividades || !Array.isArray(actividades) || actividades.length === 0) {
+          return;
+        }
+
+        const horas = renderPeriodoEnActividad(actividades, periodo, nombreActividad, contentActividad);
+        totalGeneral += horas;
+      });
+    }
+
+    headerActividad.innerHTML = `
+      <span>${nombreActividad}</span>
+      <div>
+        <span class="total-badge-section">Total histórico: ${totalGeneral.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    seccionActividad.appendChild(headerActividad);
+    seccionActividad.appendChild(contentActividad);
+    resultsContainer.appendChild(seccionActividad);
+  }
+
+  // Renderizar categoría de docencia con periodos (para vista por actividad)
+  function renderCategoriaConPeriodos(actividadesPorPeriodo, nombreCategoria, container) {
+    let totalCategoria = 0;
+
+    const subseccion = document.createElement('div');
+    subseccion.className = 'categoria-section collapsed';
+    subseccion.style.marginLeft = '20px';
+
+    const headerCategoria = document.createElement('div');
+    headerCategoria.className = 'categoria-header';
+    headerCategoria.style.backgroundColor = '#f8f9fa';
+
+    headerCategoria.addEventListener('click', () => {
+      subseccion.classList.toggle('collapsed');
+    });
+
+    const contentCategoria = document.createElement('div');
+    contentCategoria.className = 'categoria-content';
+
+    if (!actividadesPorPeriodo || Object.keys(actividadesPorPeriodo).length === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = `No hay actividades de ${nombreCategoria.toLowerCase()}.`;
+      contentCategoria.appendChild(msg);
+    } else {
+      // Crear acordeones por período
+      PERIODOS.forEach(periodo => {
+        const actividades = actividadesPorPeriodo[periodo];
+        if (!actividades || !Array.isArray(actividades) || actividades.length === 0) {
+          return;
+        }
+
+        const horas = renderPeriodoEnActividad(actividades, periodo, nombreCategoria, contentCategoria);
+        totalCategoria += horas;
+      });
+    }
+
+    headerCategoria.innerHTML = `
+      <span>${nombreCategoria}</span>
+      <div>
+        <span class="total-badge-category">Total: ${totalCategoria.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    subseccion.appendChild(headerCategoria);
+    subseccion.appendChild(contentCategoria);
+    container.appendChild(subseccion);
+
+    return totalCategoria;
+  }
+
+  // Renderizar periodo dentro de una actividad (para vista por actividad)
+  function renderPeriodoEnActividad(actividades, periodo, nombreCategoria, container) {
+    let totalHorasPeriodo = 0;
+
+    const subPeriodo = document.createElement('div');
+    subPeriodo.className = 'categoria-section collapsed';
+    subPeriodo.style.marginLeft = '40px';
+
+    const headerPeriodo = document.createElement('div');
+    headerPeriodo.className = 'categoria-header';
+    headerPeriodo.style.backgroundColor = '#fafafa';
+    headerPeriodo.style.fontSize = '0.9rem';
+
+    headerPeriodo.addEventListener('click', () => {
+      subPeriodo.classList.toggle('collapsed');
+    });
+
+    const contentPeriodo = document.createElement('div');
+    contentPeriodo.className = 'categoria-content';
+
+    // Crear tabla
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-responsive';
+
+    const table = document.createElement('table');
+    table.className = 'actividades-table';
+
+    const tipoActividad = nombreCategoria.toLowerCase().replace(/\s+/g, '');
+    const columnasEspecificas = obtenerColumnasPorTipo(tipoActividad);
+
+    // Crear encabezado
+    const thead = table.createTHead();
+    const headerRow = thead.insertRow();
+    columnasEspecificas.forEach(columna => {
+      const th = document.createElement('th');
+      th.textContent = columna;
+      th.style.backgroundColor = '#f8f9fa';
+      th.style.color = '#495057';
+      th.style.fontWeight = '600';
+      th.style.fontSize = '0.8rem';
+      th.style.textTransform = 'uppercase';
+      th.style.letterSpacing = '0.5px';
+      th.style.padding = '8px 4px';
+      th.style.textAlign = 'center';
+      th.style.border = '1px solid #dee2e6';
+      th.style.whiteSpace = 'nowrap';
+      headerRow.appendChild(th);
+    });
+
+    // Crear cuerpo
+    const tbody = table.createTBody();
+    actividades.forEach(item => {
+      const row = tbody.insertRow();
+
+      columnasEspecificas.forEach(columna => {
+        const cell = row.insertCell();
+        const valor = obtenerValorColumna(item, columna);
+        cell.textContent = String(valor);
+
+        if (columna === 'HORAS SEMESTRE') {
+          totalHorasPeriodo += extraerHorasSemestre(valor);
+        }
+      });
+    });
+
+    // Fila de total
+    if (totalHorasPeriodo > 0) {
+      const rowTotal = tbody.insertRow();
+      rowTotal.className = 'total-row';
+
+      columnasEspecificas.forEach(columna => {
+        const cell = rowTotal.insertCell();
+        if (columna === columnasEspecificas[0]) {
+          cell.innerHTML = `<strong>TOTAL:</strong>`;
+        } else if (columna === 'HORAS SEMESTRE') {
+          cell.innerHTML = `<span class="total-badge-category">${totalHorasPeriodo.toFixed(1)}</span>`;
+        } else {
+          cell.textContent = '–';
+        }
+      });
+    }
+
+    wrapper.appendChild(table);
+    contentPeriodo.appendChild(wrapper);
+
+    headerPeriodo.innerHTML = `
+      <span>Período: ${PERIODOS_NOMBRES?.[periodo] || periodo}</span>
+      <div>
+        <span class="total-badge-category">${totalHorasPeriodo.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    subPeriodo.appendChild(headerPeriodo);
+    subPeriodo.appendChild(contentPeriodo);
+    container.appendChild(subPeriodo);
+
+    return totalHorasPeriodo;
+  }
+
+function renderPersonalInfo(info) {
+  if (!info || typeof info !== 'object') return;
+
+  // DEBUG: Ver qué datos están llegando
+  console.log('🔍 DEBUG - Información personal recibida:', info);
+  console.log('🔍 DEBUG - Claves disponibles:', Object.keys(info));
+
+  const nombreCompleto = combinarNombreCompleto(info);
+
+  // ==== CÉDULA: búsqueda robusta ====
+  let cedula = info['CEDULA'] || info['DOCENTES'] || info['Docentes'];
+
+  if (!cedula) {
+    // Buscar cualquier clave que contenga "CEDULA" o sea "DOCENTES" (ignorando mayúsculas/espacios)
+    for (const key of Object.keys(info)) {
+      const keyNorm = key.toUpperCase().replace(/\s+/g, '');
+      if (keyNorm.includes('CEDULA') || keyNorm === 'DOCENTES') {
+        cedula = info[key];
+        break;
+      }
+    }
+  }
+  if (!cedula) cedula = 'No disponible';
+
+  // ==== UNIDAD ACADÉMICA: búsqueda robusta (prioriza nombre exacto del Sheet) ====
+  let unidadAcademica = info['unidadAcademica'] || info['UNIDAD ACADEMICA'] || info['Unidad Academica'];
+
+  if (!unidadAcademica) {
+    for (const key of Object.keys(info)) {
+      const keyNorm = key.toUpperCase().replace(/\s+/g, '');
+      if (keyNorm.includes('UNIDAD') && keyNorm.includes('ACADEMICA')) {
+        unidadAcademica = info[key];
+        break;
+      }
+    }
+  }
+  if (!unidadAcademica) unidadAcademica = 'No disponible';
+
+  // ==== Resto de campos (búsqueda robusta) ====
+  let vinculacion = info['VINCULACION'] || info['Vinculacion'] || info['vinculacion'] || '';
+  if (!vinculacion) {
+    for (const key of Object.keys(info)) {
+      const keyNorm = key.toUpperCase().replace(/\s+/g, '');
+      if (keyNorm.includes('VINCULACION')) {
+        vinculacion = info[key];
+        break;
+      }
+    }
+  }
+  vinculacion = vinculacion || 'No disponible';
+
+  let categoria = info['CATEGORIA'] || info['Categoria'] || info['categoria'] || '';
+  if (!categoria) {
+    for (const key of Object.keys(info)) {
+      const keyNorm = key.toUpperCase().replace(/\s+/g, '');
+      if (keyNorm.includes('CATEGORIA')) {
+        categoria = info[key];
+        break;
+      }
+    }
+  }
+  categoria = categoria || 'No disponible';
+
+  let dedicacion = info['DEDICACION'] || info['Dedicacion'] || info['dedicacion'] || '';
+  if (!dedicacion) {
+    for (const key of Object.keys(info)) {
+      const keyNorm = key.toUpperCase().replace(/\s+/g, '');
+      if (keyNorm.includes('DEDICACION')) {
+        dedicacion = info[key];
+        break;
+      }
+    }
+  }
+  dedicacion = dedicacion || 'No disponible';
+
+  let nivelAlcanzado = info['nivelAlcanzado'] || info['NIVEL ALCANZADO'] || info['Nivel Alcanzado'] || '';
+  if (!nivelAlcanzado) {
+    for (const key of Object.keys(info)) {
+      const keyNorm = key.toUpperCase().replace(/\s+/g, '');
+      if (keyNorm.includes('NIVEL') && (keyNorm.includes('ALCANZADO') || keyNorm.includes('ACADEMICO'))) {
+        nivelAlcanzado = info[key];
+        break;
+      }
+    }
+  }
+  nivelAlcanzado = nivelAlcanzado || 'No disponible';
+
+  // ==== No se incluyen campos adicionales como Centro de Costo y Cargo ====
+
+  // DEBUG: Ver valores finales asignados
+  console.log('🔍 DEBUG - Valores asignados:', {
+    nombreCompleto,
+    cedula,
+    unidadAcademica,
+    vinculacion,
+    categoria,
+    dedicacion,
+    nivelAlcanzado
+  });
+
+  const cardHTML = `
+    <div class="card">
+      <div class="card-header">
+        <i class="bi bi-person-badge mr-2"></i> Información del Docente
+      </div>
+      <div class="card-body">
+        <div class="info-grid">
+          <div class="info-item">
+            <span class="label">Nombre Completo</span>
+            <span class="value">${nombreCompleto}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Cédula</span>
+            <span class="value">${cedula}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Unidad Académica</span>
+            <span class="value">${unidadAcademica}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Vinculación</span>
+            <span class="value">${vinculacion}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Categoría</span>
+            <span class="value">${categoria}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Dedicación</span>
+            <span class="value">${dedicacion}</span>
+          </div>
+          <div class="info-item">
+            <span class="label">Nivel Alcanzado</span>
+            <span class="value">${nivelAlcanzado}</span>
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  personalInfoContainer.innerHTML = cardHTML;
+}
+
+  function renderTablaPeriodoConHistorico(periodoActual, data, datosConsolidados) {
+    if (!Array.isArray(data) || data.length === 0) {
+      renderErrorPeriodo(periodoActual, 'No hay datos disponibles');
+      return;
+    }
+
+    const filaObj = data[0];
+    let totalHorasPeriodoActual = 0;
+
+    // Card del período
+    const card = document.createElement('div');
+    card.className = 'card periodo-card collapsed';
+
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    
+    header.addEventListener('click', () => {
+      card.classList.toggle('collapsed');
+    });
+    
+    card.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    card.appendChild(body);
+
+    let algunaActividad = false;
+
+    // Procesar ACTIVIDADES DE DOCENCIA con histórico
+    const horasDocencia = procesarActividadesDocenciaConHistorico(
+      filaObj.actividadesDocencia,
+      datosConsolidados,
+      body,
+      periodoActual
+    );
+    totalHorasPeriodoActual += horasDocencia.horasPeriodoActual;
+    
+    if (filaObj.actividadesDocencia && Object.keys(filaObj.actividadesDocencia).length > 0) {
+      const tieneActividades = Object.values(filaObj.actividadesDocencia).some(arr => 
+        Array.isArray(arr) && arr.length > 0
+      );
+      if (tieneActividades) {
+        algunaActividad = true;
+      }
+    }
+
+    // Procesar otras actividades con histórico
+    const todasLasActividades = [
+      { key: 'actividadesInvestigacion', name: 'ACTIVIDADES DE INVESTIGACION' },
+      { key: 'actividadesExtension', name: 'ACTIVIDADES DE EXTENSION' },
+      { key: 'actividadesIntelectualesOArtisticas', name: 'ACTIVIDADES INTELECTUALES O ARTISTICAS' },
+      { key: 'actividadesAdministrativas', name: 'ACTIVIDADES ADMINISTRATIVAS' },
+      { key: 'actividadesComplementarias', name: 'ACTIVIDADES COMPLEMENTARIAS' },
+      { key: 'docenteEnComision', name: 'DOCENTE EN COMISION' }
+    ];
+
+    todasLasActividades.forEach(({ key, name }) => {
+      const actividades = filaObj[key];
+      const horasActividad = procesarOtraActividadConHistorico(
+        actividades,
+        name,
+        body,
+        periodoActual,
+        datosConsolidados[key]
+      );
+      totalHorasPeriodoActual += horasActividad.horasPeriodoActual;
+      
+      if (actividades && Array.isArray(actividades) && actividades.length > 0) {
+        algunaActividad = true;
+      }
+    });
+
+    if (!algunaActividad) {
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = 'No se encontraron actividades en ninguna categoría.';
+      body.appendChild(msg);
+    }
+
+    // Actualizar header con total del período actual
+    header.innerHTML = `
+      <span>Período: ${PERIODOS_NOMBRES?.[periodoActual] || periodoActual}</span>
+      <div>
+        <span class="total-badge">Total período: ${totalHorasPeriodoActual.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon" style="margin-left: 10px;"></i>
+      </div>
+    `;
+
+    resultsContainer.appendChild(card);
+  }
+
+  function procesarActividadesDocenciaConHistorico(actividadesDocencia, datosConsolidados, container, periodoActual) {
+    let totalHorasDocencia = 0;
+    let totalHorasPeriodoActual = 0;
+
+    // Crear sección desplegable principal para ACTIVIDADES DE DOCENCIA
+    const seccionDocencia = document.createElement('div');
+    seccionDocencia.className = 'categoria-section collapsed';
+
+    const headerDocencia = document.createElement('div');
+    headerDocencia.className = 'categoria-header';
+    
+    headerDocencia.addEventListener('click', () => {
+      seccionDocencia.classList.toggle('collapsed');
+    });
+
+    const contentDocencia = document.createElement('div');
+    contentDocencia.className = 'categoria-content';
+
+    if (!actividadesDocencia || Object.keys(actividadesDocencia).length === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = 'No hay actividades de docencia registradas.';
+      contentDocencia.appendChild(msg);
+    } else {
+      const categoriasDocencia = [
+        { key: 'pregrado', name: 'PREGRADO', badgeClass: 'badge-secondary' },
+        { key: 'postgrado', name: 'POSTGRADO', badgeClass: 'badge-info' },
+        { key: 'direccionTesis', name: 'DIRECCIÓN DE TESIS', badgeClass: 'badge-warning' }
+      ];
+
+      categoriasDocencia.forEach(({ key, name, badgeClass }) => {
+        const actividadesPorPeriodo = datosConsolidados[key] || {};
+        const horasCategoria = procesarCategoriaDocenciaConSubPeriodos(
+          actividadesPorPeriodo,
+          name,
+          badgeClass,
+          contentDocencia,
+          periodoActual
+        );
+        totalHorasDocencia += horasCategoria.total;
+        totalHorasPeriodoActual += horasCategoria.periodoActual;
+      });
+    }
+
+    headerDocencia.innerHTML = `
+      <span>ACTIVIDADES DE DOCENCIA</span>
+      <div>
+        <span class="total-badge-section">Período actual: ${totalHorasPeriodoActual.toFixed(1)} hrs | Total histórico: ${totalHorasDocencia.toFixed(1)} hrs</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    seccionDocencia.appendChild(headerDocencia);
+    seccionDocencia.appendChild(contentDocencia);
+    container.appendChild(seccionDocencia);
+
+    return { horasPeriodoActual: totalHorasPeriodoActual, horasTotal: totalHorasDocencia };
+  }
+
+  function procesarCategoriaDocenciaConSubPeriodos(actividadesPorPeriodo, nombreCategoria, badgeClass, container, periodoActual) {
+    let totalHorasCategoria = 0;
+    let totalHorasPeriodoActual = 0;
+
+    // Crear subsección para esta categoría
+    const subseccionCategoria = document.createElement('div');
+    subseccionCategoria.className = 'categoria-section collapsed';
+    subseccionCategoria.style.marginLeft = '20px';
+
+    const headerCategoria = document.createElement('div');
+    headerCategoria.className = 'categoria-header';
+    headerCategoria.style.backgroundColor = '#f8f9fa';
+    
+    headerCategoria.addEventListener('click', () => {
+      subseccionCategoria.classList.toggle('collapsed');
+    });
+
+    const contentCategoria = document.createElement('div');
+    contentCategoria.className = 'categoria-content';
+
+    if (!actividadesPorPeriodo || Object.keys(actividadesPorPeriodo).length === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = `No hay actividades de ${nombreCategoria.toLowerCase()} registradas.`;
+      contentCategoria.appendChild(msg);
+    } else {
+      // Crear acordeones nivel 4 por cada período
+      PERIODOS.forEach(periodo => {
+        const actividades = actividadesPorPeriodo[periodo];
+        if (!actividades || !Array.isArray(actividades) || actividades.length === 0) {
+          return; // Saltar períodos sin datos
+        }
+
+        const horasPeriodo = procesarSubPeriodo(
+          actividades,
+          periodo,
+          nombreCategoria,
+          contentCategoria,
+          periodoActual
+        );
+        
+        totalHorasCategoria += horasPeriodo;
+        if (periodo === periodoActual) {
+          totalHorasPeriodoActual += horasPeriodo;
+        }
+      });
+    }
+
+    headerCategoria.innerHTML = `
+      <span>${nombreCategoria}</span>
+      <div>
+        <span class="total-badge-category">Actual: ${totalHorasPeriodoActual.toFixed(1)} hrs | Total: ${totalHorasCategoria.toFixed(1)} hrs</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    subseccionCategoria.appendChild(headerCategoria);
+    subseccionCategoria.appendChild(contentCategoria);
+    container.appendChild(subseccionCategoria);
+
+    return { total: totalHorasCategoria, periodoActual: totalHorasPeriodoActual };
+  }
+
+  function procesarSubPeriodo(actividades, periodo, nombreCategoria, container, periodoActual) {
+    let totalHorasPeriodo = 0;
+
+    // Crear acordeón nivel 4 para este período específico
+    const subPeriodo = document.createElement('div');
+    subPeriodo.className = 'categoria-section collapsed';
+    subPeriodo.style.marginLeft = '40px';
+    
+    // Destacar visualmente el período actual
+    if (periodo === periodoActual) {
+      subPeriodo.style.borderLeft = '3px solid #495057';
+    }
+
+    const headerPeriodo = document.createElement('div');
+    headerPeriodo.className = 'categoria-header';
+    headerPeriodo.style.backgroundColor = periodo === periodoActual ? '#e9ecef' : '#fafafa';
+    headerPeriodo.style.fontSize = '0.9rem';
+    
+    headerPeriodo.addEventListener('click', () => {
+      subPeriodo.classList.toggle('collapsed');
+    });
+
+    const contentPeriodo = document.createElement('div');
+    contentPeriodo.className = 'categoria-content';
+
+    // Crear tabla
+    const wrapper = document.createElement('div');
+    wrapper.className = 'table-responsive';
+
+    const table = document.createElement('table');
+    table.className = 'actividades-table';
+
+    const tipoActividad = nombreCategoria.toLowerCase().replace(/\s+/g, '');
+    const columnasEspecificas = obtenerColumnasPorTipo(tipoActividad);
+    
+    // Crear encabezado
+    const thead = table.createTHead();
+    const headerRow = thead.insertRow();
+    columnasEspecificas.forEach(columna => {
+      const th = document.createElement('th');
+      th.textContent = columna;
+      th.style.backgroundColor = '#f8f9fa';
+      th.style.color = '#495057';
+      th.style.fontWeight = '600';
+      th.style.fontSize = '0.8rem';
+      th.style.textTransform = 'uppercase';
+      th.style.letterSpacing = '0.5px';
+      th.style.padding = '8px 4px';
+      th.style.textAlign = 'center';
+      th.style.border = '1px solid #dee2e6';
+      th.style.whiteSpace = 'nowrap';
+      headerRow.appendChild(th);
+    });
+    
+    // Crear cuerpo
+    const tbody = table.createTBody();
+    actividades.forEach(item => {
+      const row = tbody.insertRow();
+      
+      columnasEspecificas.forEach(columna => {
+        const cell = row.insertCell();
+        const valor = obtenerValorColumna(item, columna);
+        cell.textContent = String(valor);
+        
+        if (columna === 'HORAS SEMESTRE') {
+          totalHorasPeriodo += extraerHorasSemestre(valor);
+        }
+      });
+    });
+
+    // Fila de total
+    if (totalHorasPeriodo > 0) {
+      const rowTotal = tbody.insertRow();
+      rowTotal.className = 'total-row';
+      
+      columnasEspecificas.forEach(columna => {
+        const cell = rowTotal.insertCell();
+        if (columna === columnasEspecificas[0]) {
+          cell.innerHTML = `<strong>TOTAL:</strong>`;
+        } else if (columna === 'HORAS SEMESTRE') {
+          cell.innerHTML = `<span class="total-badge-category">${totalHorasPeriodo.toFixed(1)}</span>`;
+        } else {
+          cell.textContent = '–';
+        }
+      });
+    }
+
+    wrapper.appendChild(table);
+    contentPeriodo.appendChild(wrapper);
+
+    // Header con indicador de período actual
+    const indicadorActual = periodo === periodoActual ? ' <span style="color: #495057; font-weight: bold;">●</span>' : '';
+    headerPeriodo.innerHTML = `
+      <span>Período: ${PERIODOS_NOMBRES?.[periodo] || periodo}${indicadorActual}</span>
+      <div>
+        <span class="total-badge-category">${totalHorasPeriodo.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    subPeriodo.appendChild(headerPeriodo);
+    subPeriodo.appendChild(contentPeriodo);
+    container.appendChild(subPeriodo);
+
+    return totalHorasPeriodo;
+  }
+
+  function procesarCategoriaDocenciaInterna(actividades, nombreCategoria, badgeClass, container) {
+    let totalHorasCategoria = 0;
+
+    // Crear subsección para esta categoría de docencia (dentro del acordeón principal)
+    const subseccionCategoria = document.createElement('div');
+    subseccionCategoria.className = 'categoria-section collapsed';
+    subseccionCategoria.style.marginLeft = '20px'; // Indentación para mostrar jerarquía
+
+    const headerCategoria = document.createElement('div');
+    headerCategoria.className = 'categoria-header';
+    headerCategoria.style.backgroundColor = '#f8f9fa'; // Color más claro para subcategorías
+    
+    headerCategoria.addEventListener('click', () => {
+      subseccionCategoria.classList.toggle('collapsed');
+    });
+
+    const contentCategoria = document.createElement('div');
+    contentCategoria.className = 'categoria-content';
+
+    // Verificar si hay actividades en esta categoría
+    if (!actividades || !Array.isArray(actividades) || actividades.length === 0) {
+      // No hay actividades - mostrar mensaje
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = `No hay actividades de ${nombreCategoria.toLowerCase()} registradas.`;
+      contentCategoria.appendChild(msg);
+    } else {
+      // Hay actividades - crear tabla
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-responsive';
+
+      const table = document.createElement('table');
+      table.className = 'actividades-table';
+
+      // Crear cuerpo de la tabla
+      const tbody = table.createTBody();
+      
+      // Obtener columnas específicas según el tipo de actividad
+      const tipoActividad = nombreCategoria.toLowerCase().replace(/\s+/g, '');
+      const columnasEspecificas = obtenerColumnasPorTipo(tipoActividad);
+      console.log(`Procesando categoría: ${nombreCategoria}, tipo: ${tipoActividad}, columnas:`, columnasEspecificas);
+      
+      // Crear encabezado de tabla específico
+      const thead = table.createTHead();
+      const headerRow = thead.insertRow();
+      columnasEspecificas.forEach(columna => {
+        const th = document.createElement('th');
+        th.textContent = columna;
+        th.style.backgroundColor = '#f8f9fa';
+        th.style.color = '#495057';
+        th.style.fontWeight = '600';
+        th.style.fontSize = '0.8rem';
+        th.style.textTransform = 'uppercase';
+        th.style.letterSpacing = '0.5px';
+        th.style.padding = '8px 4px';
+        th.style.textAlign = 'center';
+        th.style.border = '1px solid #dee2e6';
+        th.style.whiteSpace = 'nowrap';
+        headerRow.appendChild(th);
+      });
+      
+      // Procesar cada actividad
+      actividades.forEach(item => {
+        const row = tbody.insertRow();
+        
+        // Crear celdas siguiendo el orden de las columnas específicas
+        columnasEspecificas.forEach(columna => {
+          const cell = row.insertCell();
+          const valor = obtenerValorColumna(item, columna);
+          cell.textContent = String(valor);
+          
+          // Sumar horas si es la columna HORAS SEMESTRE
+          if (columna === 'HORAS SEMESTRE') {
+            totalHorasCategoria += extraerHorasSemestre(valor);
+          }
+        });
+      });
+
+      // Agregar fila de total si hay horas
+      if (totalHorasCategoria > 0) {
+        const rowTotal = tbody.insertRow();
+        rowTotal.className = 'total-row';
+        
+        // Celdas siguiendo el orden de las columnas específicas
+        columnasEspecificas.forEach(columna => {
+          const cell = rowTotal.insertCell();
+          if (columna === columnasEspecificas[0]) {
+            cell.innerHTML = `<strong>TOTAL ${nombreCategoria}:</strong>`;
+          } else if (columna === 'HORAS SEMESTRE') {
+            cell.innerHTML = `<span class="total-badge-category">${totalHorasCategoria.toFixed(1)}</span>`;
+          } else {
+            cell.textContent = '–';
+          }
+        });
+      }
+
+      wrapper.appendChild(table);
+      contentCategoria.appendChild(wrapper);
+    }
+
+    // Actualizar header con total (siempre mostrar, aunque sea 0)
+    headerCategoria.innerHTML = `
+      <span>${nombreCategoria}</span>
+      <div>
+        <span class="total-badge-category">Total: ${totalHorasCategoria.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    subseccionCategoria.appendChild(headerCategoria);
+    subseccionCategoria.appendChild(contentCategoria);
+    container.appendChild(subseccionCategoria);
+
+    return totalHorasCategoria;
+  }
+
+  function procesarOtraActividadConHistorico(actividades, nombreActividad, container, periodoActual, actividadesPorPeriodo) {
+    let totalHorasActividad = 0;
+    let totalHorasPeriodoActual = 0;
+
+    const seccionActividad = document.createElement('div');
+    seccionActividad.className = 'categoria-section collapsed';
+
+    const headerActividad = document.createElement('div');
+    headerActividad.className = 'categoria-header';
+    
+    headerActividad.addEventListener('click', () => {
+      seccionActividad.classList.toggle('collapsed');
+    });
+
+    const contentActividad = document.createElement('div');
+    contentActividad.className = 'categoria-content';
+
+    if (!actividadesPorPeriodo || Object.keys(actividadesPorPeriodo).length === 0) {
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = 'No hay actividades registradas en esta categoría.';
+      contentActividad.appendChild(msg);
+    } else {
+      // Crear sub-acordeones por período
+      PERIODOS.forEach(periodo => {
+        const acts = actividadesPorPeriodo[periodo];
+        if (!acts || !Array.isArray(acts) || acts.length === 0) {
+          return;
+        }
+
+        const horasPeriodo = procesarSubPeriodo(
+          acts,
+          periodo,
+          nombreActividad,
+          contentActividad,
+          periodoActual
+        );
+        
+        totalHorasActividad += horasPeriodo;
+        if (periodo === periodoActual) {
+          totalHorasPeriodoActual += horasPeriodo;
+        }
+      });
+    }
+
+    headerActividad.innerHTML = `
+      <span>${nombreActividad}</span>
+      <div>
+        <span class="total-badge-section">Actual: ${totalHorasPeriodoActual.toFixed(1)} hrs | Total: ${totalHorasActividad.toFixed(1)} hrs</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    seccionActividad.appendChild(headerActividad);
+    seccionActividad.appendChild(contentActividad);
+    container.appendChild(seccionActividad);
+
+    return { horasPeriodoActual: totalHorasPeriodoActual, horasTotal: totalHorasActividad };
+  }
+
+  function procesarOtraActividad(actividades, nombreActividad, container) {
+    let totalHorasActividad = 0;
+
+    // Crear sección desplegable para esta actividad (siempre se crea)
+    const seccionActividad = document.createElement('div');
+    seccionActividad.className = 'categoria-section collapsed';
+
+    const headerActividad = document.createElement('div');
+    headerActividad.className = 'categoria-header';
+    
+    headerActividad.addEventListener('click', () => {
+      seccionActividad.classList.toggle('collapsed');
+    });
+
+    const contentActividad = document.createElement('div');
+    contentActividad.className = 'categoria-content';
+
+    // Verificar si hay actividades
+    if (!actividades || !Array.isArray(actividades) || actividades.length === 0) {
+      // No hay actividades - mostrar mensaje
+      const msg = document.createElement('div');
+      msg.className = 'tabla-vacia';
+      msg.textContent = 'No hay actividades registradas en esta categoría.';
+      contentActividad.appendChild(msg);
+    } else {
+      // Hay actividades - crear tabla
+      const wrapper = document.createElement('div');
+      wrapper.className = 'table-responsive';
+
+      const table = document.createElement('table');
+      table.className = 'actividades-table';
+
+      // Crear cuerpo de la tabla
+      const tbody = table.createTBody();
+      
+      // Obtener columnas específicas según el tipo de actividad
+      const tipoActividad = nombreActividad.toLowerCase().replace(/\s+/g, '');
+      const columnasEspecificas = obtenerColumnasPorTipo(tipoActividad);
+      
+      // Crear encabezado de tabla específico
+      const thead = table.createTHead();
+      const headerRow = thead.insertRow();
+      columnasEspecificas.forEach(columna => {
+        const th = document.createElement('th');
+        th.textContent = columna;
+        th.style.backgroundColor = '#f8f9fa';
+        th.style.color = '#495057';
+        th.style.fontWeight = '600';
+        th.style.fontSize = '0.8rem';
+        th.style.textTransform = 'uppercase';
+        th.style.letterSpacing = '0.5px';
+        th.style.padding = '8px 4px';
+        th.style.textAlign = 'center';
+        th.style.border = '1px solid #dee2e6';
+        th.style.whiteSpace = 'nowrap';
+        headerRow.appendChild(th);
+      });
+      
+      actividades.forEach(item => {
+        const row = tbody.insertRow();
+        
+        // Crear celdas siguiendo el orden de las columnas específicas
+        columnasEspecificas.forEach(columna => {
+          const cell = row.insertCell();
+          const valor = obtenerValorColumna(item, columna);
+          cell.textContent = String(valor);
+          
+          // Sumar horas si es una columna de horas
+          if (columna === 'HORAS SEMESTRE') {
+            totalHorasActividad += extraerHorasSemestre(valor);
+          }
+        });
+      });
+
+      // Agregar fila de total si hay horas
+      if (totalHorasActividad > 0) {
+        const rowTotal = tbody.insertRow();
+        rowTotal.className = 'total-row';
+        
+        // Celdas siguiendo el orden de las columnas específicas
+        columnasEspecificas.forEach(columna => {
+          const cell = rowTotal.insertCell();
+          if (columna === columnasEspecificas[0]) {
+            cell.innerHTML = `<strong>TOTAL ${nombreActividad}:</strong>`;
+          } else if (columna === 'HORAS SEMESTRE') {
+            cell.innerHTML = `<span class="total-badge-category">${totalHorasActividad.toFixed(1)}</span>`;
+          } else {
+            cell.textContent = '–';
+          }
+        });
+      }
+
+      wrapper.appendChild(table);
+      contentActividad.appendChild(wrapper);
+    }
+
+    // Actualizar header con total (siempre mostrar, aunque sea 0)
+    headerActividad.innerHTML = `
+      <span>${nombreActividad}</span>
+      <div>
+        <span class="total-badge-section">Total: ${totalHorasActividad.toFixed(1)} horas</span>
+        <i class="bi bi-chevron-down toggle-icon"></i>
+      </div>
+    `;
+
+    seccionActividad.appendChild(headerActividad);
+    seccionActividad.appendChild(contentActividad);
+    container.appendChild(seccionActividad);
+
+    return totalHorasActividad;
+  }
+
+  function renderErrorPeriodo(periodo, error) {
+    const card = document.createElement('div');
+    card.className = 'card periodo-card collapsed';
+
+    const header = document.createElement('div');
+    header.className = 'card-header';
+    header.innerHTML = `
+      <span>Período: ${PERIODOS_NOMBRES?.[periodo] || periodo}</span>
+      <i class="bi bi-chevron-down toggle-icon"></i>
+    `;
+    
+    header.addEventListener('click', () => {
+      card.classList.toggle('collapsed');
+    });
+    
+    card.appendChild(header);
+
+    const body = document.createElement('div');
+    body.className = 'card-body';
+    const msg = document.createElement('div');
+    msg.className = 'tabla-vacia';
+    msg.textContent = 'Ocurrió un error al obtener datos para este período.';
+    body.appendChild(msg);
+    card.appendChild(body);
+
+    resultsContainer.appendChild(card);
+  }
+
+</script>
+</body>
+</html>
