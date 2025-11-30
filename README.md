@@ -46,8 +46,9 @@ Ver [ESTRUCTURA_PROYECTO.md](./ESTRUCTURA_PROYECTO.md) para más detalles.
 npm install
 
 # Configurar variables de entorno
-cp .env.example .env
+cp env.example.txt .env
 # Editar .env con tus credenciales
+# Ver docs/CONFIGURACION_GOOGLE_SHEETS.md para configurar Google Sheets API
 
 # Ejecutar en desarrollo
 npm run dev
@@ -67,11 +68,14 @@ npm run harvest
 
 - [Documentación Completa](./docs/DOCUMENTACION_APLICATIVO.md)
 - [Instrucciones del Aplicativo Web](./docs/Intrucciones_AsignacionesAcademicas.md)
+- [Configuración de Google Sheets API](./docs/CONFIGURACION_GOOGLE_SHEETS.md)
+- [Configuración de Cookies](./docs/CONFIGURACION_COOKIES.md)
 - [Estructura del Proyecto](./ESTRUCTURA_PROYECTO.md)
 
 ## 🔧 Configuración
 
-Ver `.env.example` para las variables de entorno necesarias.
+- Ver `env.example.txt` para las variables de entorno necesarias
+- Ver [Configuración de Google Sheets API](./docs/CONFIGURACION_GOOGLE_SHEETS.md) para configurar la cuenta de servicio
 
 ## 📝 Notas
 
