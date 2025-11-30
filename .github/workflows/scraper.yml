@@ -53,29 +53,54 @@ jobs:
       
       - name: Create credentials.json from secret
         working-directory: ./scraper
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
         run: |
-          if [ -z "${{ secrets.GOOGLE_CREDENTIALS }}" ]; then
+          if [ -z "$GOOGLE_CREDENTIALS" ]; then
             echo "❌ Error: Secret GOOGLE_CREDENTIALS no está configurado"
             exit 1
           fi
           
-          echo "${{ secrets.GOOGLE_CREDENTIALS }}" > credentials.json
+          # Usar Python para escribir el JSON de forma segura
+          # Esto maneja mejor caracteres especiales y validación
+          # Usamos 'EOF' para evitar expansión de variables en bash
+          python3 << 'EOF'
+          import json
+          import os
+          import sys
           
-          # Verificar que el archivo se creó correctamente y es JSON válido
+          credentials_str = os.environ.get('GOOGLE_CREDENTIALS', '')
+          
+          if not credentials_str:
+              print("❌ Error: GOOGLE_CREDENTIALS está vacío", file=sys.stderr)
+              sys.exit(1)
+          
+          try:
+              # Intentar parsear el JSON para validar que es válido
+              credentials_json = json.loads(credentials_str)
+              
+              # Escribir el JSON formateado al archivo
+              with open('credentials.json', 'w', encoding='utf-8') as f:
+                  json.dump(credentials_json, f, indent=2, ensure_ascii=False)
+              
+              print("✓ JSON válido y credentials.json creado exitosamente")
+              
+          except json.JSONDecodeError as e:
+              print(f"❌ Error: El secret GOOGLE_CREDENTIALS no es un JSON válido: {e}", file=sys.stderr)
+              print(f"   Línea {e.lineno}, columna {e.colno}: {e.msg}", file=sys.stderr)
+              sys.exit(1)
+          except Exception as e:
+              print(f"❌ Error inesperado al crear credentials.json: {e}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+          
+          # Verificar que el archivo se creó correctamente
           if [ ! -f credentials.json ] || [ ! -s credentials.json ]; then
             echo "❌ Error: credentials.json no se pudo crear o está vacío"
             exit 1
           fi
           
-          # Verificar que es JSON válido
-          if ! python -c "import json; json.load(open('credentials.json'))" 2>/dev/null; then
-            echo "⚠️  Advertencia: credentials.json podría no ser JSON válido"
-            echo "El workflow continuará pero podría fallar más adelante"
-          else
-            echo "✓ JSON válido"
-          fi
-          
-          echo "✓ credentials.json creado exitosamente"
+          echo "✓ Archivo credentials.json verificado"
       
       - name: Validate required secrets
         run: |
