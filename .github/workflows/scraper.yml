@@ -1,10 +1,10 @@
 name: Ejecutar Scraper Univalle
 
 on:
-  # Ejecutar automáticamente a las 3:00 AM hora Colombia (UTC-5) todos los días
-  # Colombia UTC-5, entonces 3:00 AM COT = 8:00 AM UTC
+  # Ejecutar automáticamente a las 2:00 AM hora Colombia (UTC-5) todos los días
+  # Colombia UTC-5, entonces 2:00 AM COT = 7:00 AM UTC
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '0 7 * * *'
   
   # Permite ejecución manual desde GitHub Actions UI
   workflow_dispatch:
@@ -29,7 +29,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # Timeout de 6 horas para procesar todas las cédulas
+    timeout-minutes: 840  # Timeout de 14 horas (9 períodos + 8 delays de 40 min cada uno)
     
     steps:
       - name: Checkout repository
@@ -155,7 +155,7 @@ jobs:
           echo "source_id=$SOURCE_ID" >> $GITHUB_OUTPUT
           echo "target_id=$TARGET_ID" >> $GITHUB_OUTPUT
       
-      - name: Run scraper
+      - name: Run scraper for all periods
         working-directory: ./scraper
         env:
           # Credenciales de Google Sheets
@@ -183,8 +183,10 @@ jobs:
           REQUEST_RETRY_DELAY: ${{ vars.REQUEST_RETRY_DELAY || '2' }}
           DEFAULT_PERIODOS_COUNT: ${{ vars.DEFAULT_PERIODOS_COUNT || '8' }}
           
-          # Período objetivo a procesar
-          TARGET_PERIOD: ${{ inputs.target_period || vars.TARGET_PERIOD || '2026-1' }}
+          # Configuración de Google Sheets API (timeouts y reintentos)
+          SHEETS_READ_TIMEOUT: ${{ vars.SHEETS_READ_TIMEOUT || '60' }}
+          SHEETS_MAX_RETRIES: ${{ vars.SHEETS_MAX_RETRIES || '3' }}
+          SHEETS_RETRY_DELAY: ${{ vars.SHEETS_RETRY_DELAY || '5' }}
           
           # Logging
           LOG_LEVEL: INFO
@@ -194,21 +196,112 @@ jobs:
           COOKIE_PHPSESSID: ${{ secrets.COOKIE_PHPSESSID || '' }}
           COOKIE_ASIGACAD: ${{ secrets.COOKIE_ASIGACAD || '' }}
         run: |
-          set -e  # Salir en caso de error
+          set +e  # No salir en caso de error, continuar con siguientes períodos
           
-          echo "🚀 Iniciando scraper..."
-          echo "   Período objetivo: $TARGET_PERIOD"
-          echo "   Hoja fuente: ${{ inputs.source_worksheet || '2025-2' }}"
-          echo "   Columna: ${{ inputs.source_column || 'D' }}"
+          # Definir períodos a procesar (del más reciente al más antiguo)
+          PERIODS=("2026-1" "2025-2" "2025-1" "2024-2" "2024-1" "2023-2" "2023-1" "2022-2" "2022-1")
           
-          python main.py \
-            --modo completo \
-            --source-sheet-url "$SHEET_URL_SOURCE" \
-            --target-sheet-url "$SHEET_URL_TARGET" \
-            --target-period "$TARGET_PERIOD" \
-            --source-worksheet "${{ inputs.source_worksheet || '2025-2' }}" \
-            --source-column "${{ inputs.source_column || 'D' }}" \
-            --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}
+          # Para ejecución manual, usar solo el período especificado
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.target_period }}" ]; then
+            PERIODS=("${{ inputs.target_period }}")
+            echo "📋 Modo manual: procesando solo período ${{ inputs.target_period }}"
+          else
+            echo "📋 Modo automático: procesando ${#PERIODS[@]} períodos secuencialmente"
+            echo "   Períodos: ${PERIODS[*]}"
+            echo "   Delay entre períodos: 40 minutos"
+          fi
+          
+          # Variables para tracking
+          TOTAL_PERIODS=${#PERIODS[@]}
+          SUCCESSFUL=0
+          FAILED=0
+          FAILED_PERIODS=()
+          
+          # Procesar cada período
+          for i in "${!PERIODS[@]}"; do
+            PERIOD="${PERIODS[$i]}"
+            PERIOD_NUM=$((i + 1))
+            
+            echo ""
+            echo "=========================================================================="
+            echo "🚀 PERÍODO $PERIOD_NUM/$TOTAL_PERIODS: $PERIOD"
+            echo "=========================================================================="
+            echo "   Hora inicio: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+            echo "   Hoja fuente: ${{ inputs.source_worksheet || '2025-2' }}"
+            echo "   Columna: ${{ inputs.source_column || 'D' }}"
+            echo ""
+            
+            # Ejecutar scraper para este período
+            if python main.py \
+              --modo completo \
+              --source-sheet-url "$SHEET_URL_SOURCE" \
+              --target-sheet-url "$SHEET_URL_TARGET" \
+              --target-period "$PERIOD" \
+              --source-worksheet "${{ inputs.source_worksheet || '2025-2' }}" \
+              --source-column "${{ inputs.source_column || 'D' }}" \
+              --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}; then
+              
+              echo ""
+              echo "✅ Período $PERIOD completado exitosamente"
+              SUCCESSFUL=$((SUCCESSFUL + 1))
+            else
+              echo ""
+              echo "❌ Error al procesar período $PERIOD"
+              FAILED=$((FAILED + 1))
+              FAILED_PERIODS+=("$PERIOD")
+            fi
+            
+            echo "   Hora fin: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+            
+            # Si no es el último período, esperar 40 minutos
+            if [ $PERIOD_NUM -lt $TOTAL_PERIODS ]; then
+              NEXT_PERIOD="${PERIODS[$((i + 1))]}"
+              echo ""
+              echo "⏳ Esperando 40 minutos antes del siguiente período ($NEXT_PERIOD)..."
+              echo "   Próximo inicio estimado: $(date -d '+40 minutes' '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -v +40M '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo 'en 40 minutos')"
+              
+              # Sleep en chunks de 1 minuto para poder ver progreso
+              for min in {1..40}; do
+                sleep 60
+                if [ $((min % 10)) -eq 0 ]; then
+                  echo "   ... $((40 - min)) minutos restantes"
+                fi
+              done
+              
+              echo "✓ Delay completado, iniciando siguiente período"
+            fi
+          done
+          
+          # Resumen final
+          echo ""
+          echo "=========================================================================="
+          echo "📊 RESUMEN FINAL"
+          echo "=========================================================================="
+          echo "   Total períodos procesados: $TOTAL_PERIODS"
+          echo "   Exitosos: $SUCCESSFUL"
+          echo "   Fallidos: $FAILED"
+          
+          if [ $FAILED -gt 0 ]; then
+            echo ""
+            echo "   Períodos con errores:"
+            for period in "${FAILED_PERIODS[@]}"; do
+              echo "     - $period"
+            done
+          fi
+          
+          echo ""
+          echo "   Hora finalización: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          echo "=========================================================================="
+          
+          # Salir con código de error si hubo fallos (pero después de procesar todos)
+          if [ $FAILED -gt 0 ]; then
+            echo ""
+            echo "⚠️  Algunos períodos fallaron, revisa los logs arriba"
+            exit 1
+          fi
+          
+          echo ""
+          echo "✅ Todos los períodos completados exitosamente"
         continue-on-error: true
         id: scrape_run
       

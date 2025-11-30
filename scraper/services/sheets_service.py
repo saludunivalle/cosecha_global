@@ -68,29 +68,41 @@ class SheetsService:
                           o GOOGLE_SHEETS_SPREADSHEET_ID como fallback.
         """
         try:
+            logger.info("Inicializando conexión con Google Sheets...")
+            
             credentials = ServiceAccountCredentials.from_json_keyfile_name(
                 GOOGLE_SHEETS_CREDENTIALS_PATH,
                 self.SCOPE
             )
-            self.client = gspread.authorize(credentials)
+            logger.debug("Credenciales cargadas correctamente")
             
-            # Configurar timeout del cliente HTTP
+            self.client = gspread.authorize(credentials)
+            logger.debug("Cliente gspread autorizado")
+            
+            # Configurar timeout del cliente HTTP (reducir a 60 segundos para conexión inicial)
+            timeout_inicial = min(60, SHEETS_READ_TIMEOUT)
             if hasattr(self.client, 'http_client') and hasattr(self.client.http_client, 'timeout'):
-                self.client.http_client.timeout = SHEETS_READ_TIMEOUT
-                logger.debug(f"Timeout configurado: {SHEETS_READ_TIMEOUT} segundos")
+                self.client.http_client.timeout = timeout_inicial
+                logger.debug(f"Timeout configurado: {timeout_inicial} segundos")
             else:
                 # Fallback: configurar timeout en el cliente de gspread si está disponible
                 try:
                     import httplib2
-                    http = httplib2.Http(timeout=SHEETS_READ_TIMEOUT)
+                    http = httplib2.Http(timeout=timeout_inicial)
                     self.client.http_client = http
-                    logger.debug(f"Timeout configurado mediante httplib2: {SHEETS_READ_TIMEOUT} segundos")
+                    logger.debug(f"Timeout configurado mediante httplib2: {timeout_inicial} segundos")
                 except Exception as e:
                     logger.warning(f"No se pudo configurar timeout del cliente HTTP: {e}")
             
             # Crear servicio de Google Sheets API para acceso directo (si está disponible)
             if HAS_GOOGLEAPICLIENT:
-                self.sheets_service_api = build('sheets', 'v4', credentials=credentials)
+                try:
+                    logger.debug("Construyendo servicio de Google Sheets API...")
+                    self.sheets_service_api = build('sheets', 'v4', credentials=credentials)
+                    logger.debug("Servicio de Google Sheets API construido")
+                except Exception as e:
+                    logger.warning(f"Error al construir servicio API: {e}")
+                    self.sheets_service_api = None
             else:
                 self.sheets_service_api = None
                 logger.warning(
@@ -117,19 +129,68 @@ class SheetsService:
             else:
                 raise ValueError("No se especificó spreadsheet_id y no hay configuración por defecto")
             
-            self.spreadsheet = self.client.open_by_key(sheet_id)
+            # Abrir spreadsheet con reintentos
+            logger.info(f"Conectando con spreadsheet ID: {sheet_id}")
+            self.spreadsheet = self._open_spreadsheet_with_retry(sheet_id)
             self.spreadsheet_id = sheet_id
             
             # Inicializar caché de spreadsheets
             self._spreadsheet_cache: Dict[str, Any] = {}
             
-            logger.info(f"Conectado a Google Sheets: {self.spreadsheet.title} (ID: {sheet_id})")
+            logger.info(f"✓ Conectado a Google Sheets: {self.spreadsheet.title} (ID: {sheet_id})")
         except FileNotFoundError:
-            logger.error(f"Archivo de credenciales no encontrado: {GOOGLE_SHEETS_CREDENTIALS_PATH}")
+            logger.error(f"❌ Archivo de credenciales no encontrado: {GOOGLE_SHEETS_CREDENTIALS_PATH}")
             raise
         except Exception as e:
-            logger.error(f"Error al conectar con Google Sheets: {e}")
+            logger.error(f"❌ Error al conectar con Google Sheets: {e}")
             raise
+    
+    def _open_spreadsheet_with_retry(self, sheet_id: str, max_retries: int = 3):
+        """
+        Abre un spreadsheet con reintentos en caso de timeout.
+        
+        Args:
+            sheet_id: ID del spreadsheet
+            max_retries: Número máximo de reintentos
+            
+        Returns:
+            Objeto Spreadsheet de gspread
+            
+        Raises:
+            Exception: Si todos los reintentos fallan
+        """
+        import requests
+        
+        for intento in range(1, max_retries + 1):
+            try:
+                logger.info(f"Intento {intento}/{max_retries} de abrir spreadsheet...")
+                spreadsheet = self.client.open_by_key(sheet_id)
+                logger.info(f"✓ Spreadsheet abierto exitosamente: {spreadsheet.title}")
+                return spreadsheet
+            
+            except requests.exceptions.ReadTimeout as e:
+                if intento < max_retries:
+                    delay = 5 * intento  # Backoff: 5s, 10s, 15s
+                    logger.warning(f"⚠️ Timeout en intento {intento}. Reintentando en {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"❌ Timeout después de {max_retries} intentos")
+                    raise
+            
+            except requests.exceptions.ConnectionError as e:
+                if intento < max_retries:
+                    delay = 5 * intento
+                    logger.warning(f"⚠️ Error de conexión en intento {intento}. Reintentando en {delay}s...")
+                    time.sleep(delay)
+                else:
+                    logger.error(f"❌ Error de conexión después de {max_retries} intentos")
+                    raise
+            
+            except Exception as e:
+                logger.error(f"❌ Error inesperado al abrir spreadsheet: {e}")
+                raise
+        
+        raise RuntimeError(f"No se pudo abrir spreadsheet después de {max_retries} intentos")
     
     def get_source_spreadsheet(self):
         """
