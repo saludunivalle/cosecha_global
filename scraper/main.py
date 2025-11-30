@@ -31,6 +31,7 @@ from scraper.config.settings import (
     LOG_FILE,
     validate_config,
     GOOGLE_SHEETS_SPREADSHEET_ID,
+    TARGET_PERIOD,
 )
 from scraper.services.univalle_scraper import UnivalleScraper, DatosDocente
 from scraper.services.sheets_service import SheetsService
@@ -393,17 +394,16 @@ def flujo_completo(
     source_worksheet: str = "2025-2",
     source_column: str = "D",
     target_sheet_url: Optional[str] = None,
-    current_period: str = "2026-1",
-    n_periodos: int = 8,
+    target_period: Optional[str] = None,
     delay_entre_cedulas: float = 1.0
 ):
     """
-    Flujo completo de scraping:
+    Flujo completo de scraping para un período específico:
     
     1. Leer cédulas desde Google Sheet
-    2. Calcular períodos
-    3. Preparar hojas de períodos
-    4. Scrapear cada cédula y agrupar por período
+    2. Obtener período objetivo (TARGET_PERIOD)
+    3. Preparar hoja del período
+    4. Scrapear cada cédula para el período
     5. Escribir datos en batch
     6. Logging completo y notificaciones
     
@@ -412,8 +412,7 @@ def flujo_completo(
         source_worksheet: Nombre de la hoja fuente (default: "2025-2")
         source_column: Columna de cédulas (default: "D")
         target_sheet_url: URL de la hoja destino (None = usar hoja por defecto)
-        current_period: Período actual (default: "2026-1")
-        n_periodos: Número de períodos anteriores (default: 8)
+        target_period: Período a procesar (None = usar TARGET_PERIOD de variable de entorno)
         delay_entre_cedulas: Delay entre cédulas en segundos (default: 1.0)
     """
     logger = logging.getLogger(__name__)
@@ -435,23 +434,46 @@ def flujo_completo(
     
     try:
         # 1. Inicializar servicios
-        logger.info("\n[PASO 1/7] Inicializando servicios...")
+        logger.info("\n[PASO 1/5] Inicializando servicios...")
         scraper = UnivalleScraper()
         sheets_service = SheetsService()
         period_manager = PeriodManager(sheets_service, scraper)
         logger.info("✓ Servicios inicializados")
         
-        # 2. Leer cédulas desde Google Sheet
-        logger.info(f"\n[PASO 2/7] Leyendo cédulas desde hoja '{source_worksheet}', columna {source_column}...")
+        # 2. Obtener período objetivo
+        logger.info("\n[PASO 2/5] Obteniendo período objetivo...")
         try:
+            if not target_period:
+                target_period = period_manager.get_target_period()
+            else:
+                # Validar formato del período proporcionado
+                from scraper.utils.helpers import parsear_periodo_label
+                periodo_info = parsear_periodo_label(target_period)
+                if not periodo_info:
+                    raise ValueError(
+                        f"Formato de período inválido: {target_period}. "
+                        f"Debe ser en formato 'YYYY-T' (ej: '2026-1', '2025-2')"
+                    )
+            
+            logger.info(f"✓ Período objetivo: {target_period}")
+        except Exception as e:
+            error_msg = f"Error obteniendo período objetivo: {e}"
+            logger.error(error_msg, exc_info=True)
+            errores_criticos.append(error_msg)
+            raise
+        
+        # 3. Leer cédulas desde Google Sheet
+        logger.info(f"\n[PASO 3/5] Leyendo cédulas desde hoja '{source_worksheet}', columna {source_column}...")
+        try:
+            # Usar método batch más eficiente (usa configuración de settings)
             if source_sheet_url:
-                cedulas = sheets_service.get_cedulas_from_sheet(
+                cedulas = sheets_service.get_cedulas_batch(
                     sheet_url=source_sheet_url,
                     worksheet_name=source_worksheet,
                     column=source_column
                 )
             else:
-                cedulas = sheets_service.get_cedulas_from_sheet(
+                cedulas = sheets_service.get_cedulas_batch(
                     worksheet_name=source_worksheet,
                     column=source_column
                 )
@@ -468,71 +490,58 @@ def flujo_completo(
             errores_criticos.append(error_msg)
             raise
         
-        # 3. Calcular períodos
-        logger.info(f"\n[PASO 3/7] Calculando períodos desde {current_period} (+ {n_periodos} anteriores)...")
-        try:
-            periodos = period_manager.calculate_periods(current_period, n_previous=n_periodos)
-            logger.info(f"✓ {len(periodos)} períodos calculados: {periodos}")
-        except Exception as e:
-            error_msg = f"Error calculando períodos: {e}"
-            logger.error(error_msg, exc_info=True)
-            errores_criticos.append(error_msg)
-            raise
-        
-        # 4. Preparar hojas de períodos
-        logger.info(f"\n[PASO 4/7] Preparando hojas de períodos...")
+        # 4. Preparar hoja del período
+        logger.info(f"\n[PASO 4/5] Preparando hoja para período {target_period}...")
         try:
             if target_sheet_url:
-                period_manager.prepare_period_sheets(
+                period_manager.prepare_single_period_sheet(
                     sheet_url=target_sheet_url,
-                    periods=periodos
+                    period=target_period
                 )
             else:
-                period_manager.prepare_period_sheets(
-                    periods=periodos
+                period_manager.prepare_single_period_sheet(
+                    period=target_period
                 )
-            logger.info(f"✓ {len(periodos)} hojas preparadas")
+            logger.info(f"✓ Hoja del período {target_period} preparada")
         except Exception as e:
-            error_msg = f"Error preparando hojas: {e}"
+            error_msg = f"Error preparando hoja: {e}"
             logger.error(error_msg, exc_info=True)
             errores_criticos.append(error_msg)
             raise
         
-        # 5. Scrapear cada cédula y agrupar por período
-        logger.info(f"\n[PASO 5/7] Scrapeando {len(cedulas)} cédulas...")
-        
-        # Acumulador de actividades por período
-        todas_actividades_por_periodo: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
-        
-        # Mapeo de períodos a IDs para scraping
-        periodos_con_id = {}
+        # 5. Obtener ID del período objetivo
+        logger.info(f"\n[PASO 5/7] Obteniendo ID del período {target_period}...")
         try:
-            logger.info("Obteniendo IDs de períodos disponibles...")
+            logger.info("Obteniendo períodos disponibles desde el sistema...")
             periodos_disponibles = scraper.obtener_periodos_disponibles()
             logger.info(f"✓ {len(periodos_disponibles)} períodos disponibles en el sistema")
             
-            for periodo_label in periodos:
-                # Buscar ID del período
-                periodo_match = next(
-                    (p for p in periodos_disponibles if p['label'] == periodo_label),
-                    None
+            # Buscar ID del período objetivo
+            periodo_match = next(
+                (p for p in periodos_disponibles if p['label'] == target_period),
+                None
+            )
+            
+            if not periodo_match:
+                raise ValueError(
+                    f"No se encontró el período {target_period} en el sistema. "
+                    f"Períodos disponibles: {[p['label'] for p in periodos_disponibles[:10]]}"
                 )
-                if periodo_match:
-                    periodos_con_id[periodo_label] = periodo_match['idPeriod']
-                    logger.debug(f"✓ {periodo_label} → ID: {periodo_match['idPeriod']}")
-                else:
-                    logger.warning(f"⚠️ No se encontró ID para período {periodo_label} en el sistema")
             
-            if not periodos_con_id:
-                raise ValueError("No se encontraron IDs para ninguno de los períodos solicitados")
-            
-            logger.info(f"✓ {len(periodos_con_id)}/{len(periodos)} períodos mapeados correctamente")
+            periodo_id = periodo_match['idPeriod']
+            logger.info(f"✓ Período {target_period} → ID: {periodo_id}")
             
         except Exception as e:
-            error_msg = f"Error obteniendo IDs de períodos: {e}"
+            error_msg = f"Error obteniendo ID del período: {e}"
             logger.error(error_msg, exc_info=True)
             errores_criticos.append(error_msg)
             raise
+        
+        # 6. Scrapear cada cédula para el período objetivo
+        logger.info(f"\n[PASO 6/7] Scrapeando {len(cedulas)} cédulas para período {target_period}...")
+        
+        # Acumulador de actividades para el período
+        actividades_periodo: List[Dict[str, Any]] = []
         
         # Procesar cada cédula con barra de progreso
         cedulas_procesadas = []
@@ -540,73 +549,40 @@ def flujo_completo(
         
         iterador_cedulas = tqdm(
             cedulas,
-            desc="Scrapeando cédulas",
+            desc=f"Scrapeando cédulas para {target_period}",
             unit="cedula",
             disable=not HAS_TQDM
         )
         
         for cedula in iterador_cedulas:
             if HAS_TQDM:
-                iterador_cedulas.set_description(f"Scrapeando {cedula}")
+                iterador_cedulas.set_description(f"Scrapeando {cedula} - {target_period}")
             
             cedula_limpia = limpiar_cedula(cedula)
             errores_cedula = []
             
             try:
-                # Scrapear todos los períodos para esta cédula
-                actividades_cedula = []
+                logger.debug(f"Scrapeando {cedula_limpia} para período {target_period} (ID: {periodo_id})")
+                actividades_cedula = scraper.scrape_teacher_data(
+                    cedula_limpia,
+                    id_periodo=periodo_id,
+                    max_retries=3,
+                    delay_min=0.5,
+                    delay_max=1.0
+                )
                 
-                for periodo_label in periodos:
-                    periodo_id = periodos_con_id.get(periodo_label)
-                    
-                    if not periodo_id:
-                        logger.debug(f"Saltando período {periodo_label} para {cedula_limpia} (sin ID)")
-                        continue
-                    
-                    try:
-                        logger.debug(f"Scrapeando {cedula_limpia} para período {periodo_label} (ID: {periodo_id})")
-                        actividades_periodo = scraper.scrape_teacher_data(
-                            cedula_limpia,
-                            id_periodo=periodo_id,
-                            max_retries=3,
-                            delay_min=0.5,
-                            delay_max=1.0
-                        )
-                        
-                        # Asegurar que todas las actividades tengan el período correcto
-                        for actividad in actividades_periodo:
-                            # El período ya debería venir en la actividad, pero lo aseguramos
-                            if not actividad.get('periodo') or actividad.get('periodo') != periodo_label:
-                                actividad['periodo'] = periodo_label
-                        
-                        actividades_cedula.extend(actividades_periodo)
-                        logger.debug(f"✓ {periodo_label}: {len(actividades_periodo)} actividades extraídas")
-                        
-                        # Delay entre períodos
-                        time.sleep(0.3)
-                        
-                    except Exception as e:
-                        error_periodo = f"Período {periodo_label}: {str(e)}"
-                        errores_cedula.append(error_periodo)
-                        logger.warning(f"Error scrapeando {cedula_limpia} para {periodo_label}: {e}")
+                # Asegurar que todas las actividades tengan el período correcto
+                for actividad in actividades_cedula:
+                    if not actividad.get('periodo') or actividad.get('periodo') != target_period:
+                        actividad['periodo'] = target_period
                 
-                # Agrupar actividades de esta cédula por período
                 if actividades_cedula:
-                    actividades_agrupadas = agrupar_actividades_por_periodo(actividades_cedula)
-                    
-                    # Acumular en el diccionario global
-                    for periodo, actividades in actividades_agrupadas.items():
-                        todas_actividades_por_periodo[periodo].extend(actividades)
-                    
+                    actividades_periodo.extend(actividades_cedula)
                     estadisticas['total_actividades'] += len(actividades_cedula)
                     estadisticas['cedulas_procesadas'] += 1
-                    
-                    logger.info(f"✓ {cedula_limpia}: {len(actividades_cedula)} actividades en {len(actividades_agrupadas)} períodos")
+                    logger.info(f"✓ {cedula_limpia}: {len(actividades_cedula)} actividades extraídas")
                 else:
-                    logger.warning(f"⚠️ {cedula_limpia}: No se encontraron actividades en ningún período")
-                
-                if errores_cedula:
-                    estadisticas['errores_por_cedula'][cedula_limpia] = errores_cedula
+                    logger.warning(f"⚠️ {cedula_limpia}: No se encontraron actividades para período {target_period}")
                 
                 cedulas_procesadas.append(cedula_limpia)
                 
@@ -624,32 +600,23 @@ def flujo_completo(
         
         logger.info(f"\n✓ Scraping completado: {estadisticas['cedulas_procesadas']} exitosas, {estadisticas['cedulas_con_error']} con errores")
         
-        # 6. Escribir datos en batch por período
-        logger.info(f"\n[PASO 6/7] Escribiendo datos en hojas (batch write)...")
+        # 7. Escribir datos en batch
+        logger.info(f"\n[PASO 7/7] Escribiendo datos en hoja del período {target_period}...")
         
-        if not todas_actividades_por_periodo:
+        if not actividades_periodo:
             logger.warning("⚠️ No hay actividades para escribir")
         else:
-            for periodo_label in tqdm(
-                periodos,
-                desc="Escribiendo hojas",
-                unit="periodo",
-                disable=not HAS_TQDM
-            ):
-                if periodo_label in todas_actividades_por_periodo:
-                    actividades_periodo = todas_actividades_por_periodo[periodo_label]
-                    
-                    try:
-                        escribir_actividades_en_hojas(
-                            sheets_service,
-                            {periodo_label: actividades_periodo},
-                            logger
-                        )
-                        logger.info(f"✓ Período {periodo_label}: {len(actividades_periodo)} actividades escritas")
-                    except Exception as e:
-                        error_msg = f"Error escribiendo período {periodo_label}: {e}"
-                        logger.error(error_msg, exc_info=True)
-                        errores_criticos.append(error_msg)
+            try:
+                escribir_actividades_en_hojas(
+                    sheets_service,
+                    {target_period: actividades_periodo},
+                    logger
+                )
+                logger.info(f"✓ Período {target_period}: {len(actividades_periodo)} actividades escritas")
+            except Exception as e:
+                error_msg = f"Error escribiendo período {target_period}: {e}"
+                logger.error(error_msg, exc_info=True)
+                errores_criticos.append(error_msg)
         
         # 7. Resumen final
         tiempo_total = time.time() - inicio_total
@@ -658,18 +625,13 @@ def flujo_completo(
         logger.info("="*80)
         logger.info("RESUMEN FINAL")
         logger.info("="*80)
+        logger.info(f"Período procesado: {target_period}")
         logger.info(f"Tiempo total de ejecución: {tiempo_total:.2f} segundos ({tiempo_total/60:.2f} minutos)")
         logger.info(f"Cédulas leídas: {estadisticas['cedulas_leidas']}")
         logger.info(f"Cédulas procesadas exitosamente: {estadisticas['cedulas_procesadas']}")
         logger.info(f"Cédulas con errores: {estadisticas['cedulas_con_error']}")
         logger.info(f"Total actividades extraídas: {estadisticas['total_actividades']}")
-        logger.info(f"Períodos procesados: {len(periodos)}")
-        
-        # Detalles por período
-        logger.info(f"\nActividades por período:")
-        for periodo_label in periodos:
-            count = len(todas_actividades_por_periodo.get(periodo_label, []))
-            logger.info(f"  {periodo_label}: {count} actividades")
+        logger.info(f"Actividades para período {target_period}: {len(actividades_periodo)}")
         
         # Errores
         if estadisticas['errores_por_cedula']:
@@ -755,17 +717,10 @@ def main():
     )
     
     parser.add_argument(
-        '--current-period',
+        '--target-period',
         type=str,
-        default='2026-1',
-        help='Período actual para calcular anteriores (default: "2026-1")'
-    )
-    
-    parser.add_argument(
-        '--n-periodos',
-        type=int,
-        default=8,
-        help='Número de períodos anteriores a incluir (default: 8)'
+        default=None,
+        help='Período objetivo a procesar (ej: "2026-1"). Si no se especifica, usa TARGET_PERIOD de variable de entorno'
     )
     
     parser.add_argument(
@@ -827,8 +782,7 @@ def main():
                 source_worksheet=args.source_worksheet,
                 source_column=args.source_column,
                 target_sheet_url=args.target_sheet_url,
-                current_period=args.current_period,
-                n_periodos=args.n_periodos,
+                target_period=args.target_period,
                 delay_entre_cedulas=args.delay_cedulas
             )
             

@@ -1,18 +1,14 @@
-name: Ejecutar Scraper Univalle
+name: Scraper - Periodo 2025-2
 
 on:
-  # Ejecutar automáticamente a las 3:00 AM hora Colombia (UTC-5) todos los días
-  # Colombia UTC-5, entonces 3:00 AM COT = 8:00 AM UTC
+  # Ejecutar automáticamente a las 3:30 AM hora Colombia (UTC-5) todos los días
+  # Colombia UTC-5, entonces 3:30 AM COT = 8:30 AM UTC
   schedule:
-    - cron: '0 8 * * *'
+    - cron: '30 8 * * *'
   
   # Permite ejecución manual desde GitHub Actions UI
   workflow_dispatch:
     inputs:
-      target_period:
-        description: 'Período objetivo a procesar (ej: 2026-1)'
-        required: false
-        default: '2026-1'
       source_worksheet:
         description: 'Hoja fuente (worksheet)'
         required: false
@@ -29,7 +25,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # Timeout de 1 hora para el job completo
+    timeout-minutes: 45  # Timeout de 45 minutos para un período
     
     steps:
       - name: Checkout repository
@@ -57,9 +53,6 @@ jobs:
             exit 1
           fi
           
-          # Usar Python para escribir el JSON de forma segura
-          # Esto maneja mejor caracteres especiales y validación
-          # Usamos 'EOF' para evitar expansión de variables en bash
           python3 << 'EOF'
           import json
           import os
@@ -72,25 +65,18 @@ jobs:
               sys.exit(1)
           
           try:
-              # Intentar parsear el JSON para validar que es válido
               credentials_json = json.loads(credentials_str)
-              
-              # Escribir el JSON formateado al archivo
               with open('credentials.json', 'w', encoding='utf-8') as f:
                   json.dump(credentials_json, f, indent=2, ensure_ascii=False)
-              
               print("✓ JSON válido y credentials.json creado exitosamente")
-              
           except json.JSONDecodeError as e:
               print(f"❌ Error: El secret GOOGLE_CREDENTIALS no es un JSON válido: {e}", file=sys.stderr)
-              print(f"   Línea {e.lineno}, columna {e.colno}: {e.msg}", file=sys.stderr)
               sys.exit(1)
           except Exception as e:
               print(f"❌ Error inesperado al crear credentials.json: {e}", file=sys.stderr)
               sys.exit(1)
           EOF
           
-          # Verificar que el archivo se creó correctamente
           if [ ! -f credentials.json ] || [ ! -s credentials.json ]; then
             echo "❌ Error: credentials.json no se pudo crear o está vacío"
             exit 1
@@ -115,21 +101,17 @@ jobs:
       - name: Extract spreadsheet IDs from URLs
         id: extract_ids
         run: |
-          # Función para extraer ID de una URL de Google Sheets
           extract_sheet_id() {
             local url="$1"
-            # Extraer ID de URL: https://docs.google.com/spreadsheets/d/ID/edit
             echo "$url" | sed -n 's/.*\/spreadsheets\/d\/\([a-zA-Z0-9_-]\{44,\}\).*/\1/p'
           }
           
           SOURCE_URL="${{ secrets.SHEET_URL_SOURCE }}"
           TARGET_URL="${{ secrets.SHEET_URL_TARGET }}"
           
-          # Extraer IDs
           SOURCE_ID=$(extract_sheet_id "$SOURCE_URL")
           TARGET_ID=$(extract_sheet_id "$TARGET_URL")
           
-          # Si no se pudo extraer de la URL, intentar usar el valor directamente (por si ya es un ID)
           if [ -z "$SOURCE_ID" ]; then
             SOURCE_ID="$SOURCE_URL"
           fi
@@ -137,7 +119,6 @@ jobs:
             TARGET_ID="$TARGET_URL"
           fi
           
-          # Validar que tenemos IDs
           if [ -z "$SOURCE_ID" ]; then
             echo "❌ Error: No se pudo extraer ID de SHEET_URL_SOURCE"
             exit 1
@@ -147,60 +128,35 @@ jobs:
             exit 1
           fi
           
-          echo "✓ IDs extraídos:"
-          echo "  SOURCE_ID: ${SOURCE_ID:0:20}..."
-          echo "  TARGET_ID: ${TARGET_ID:0:20}..."
-          
-          # Guardar en outputs para usar en el siguiente paso
+          echo "✓ IDs extraídos"
           echo "source_id=$SOURCE_ID" >> $GITHUB_OUTPUT
           echo "target_id=$TARGET_ID" >> $GITHUB_OUTPUT
       
       - name: Run scraper
         working-directory: ./scraper
         env:
-          # Credenciales de Google Sheets
           GOOGLE_SHEETS_CREDENTIALS_PATH: credentials.json
-          
-          # IDs de las hojas (extraídos de las URLs)
           SHEET_SOURCE: ${{ steps.extract_ids.outputs.source_id }}
           SHEET_TARGET: ${{ steps.extract_ids.outputs.target_id }}
-          
-          # También configurar como GOOGLE_SHEETS_SOURCE_ID y GOOGLE_SHEETS_TARGET_ID
           GOOGLE_SHEETS_SOURCE_ID: ${{ steps.extract_ids.outputs.source_id }}
           GOOGLE_SHEETS_TARGET_ID: ${{ steps.extract_ids.outputs.target_id }}
-          
-          # Spreadsheet ID por defecto (legacy, usar SOURCE/TARGET en su lugar)
           GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID || steps.extract_ids.outputs.target_id }}
-          
-          # URLs de las hojas (desde secrets, para uso en comandos)
           SHEET_URL_SOURCE: ${{ secrets.SHEET_URL_SOURCE }}
           SHEET_URL_TARGET: ${{ secrets.SHEET_URL_TARGET }}
-          
-          # Configuración del scraper (opcional, con defaults)
           UNIVALLE_BASE_URL: ${{ vars.UNIVALLE_BASE_URL || 'https://proxse26.univalle.edu.co/asignacion' }}
           REQUEST_TIMEOUT: ${{ vars.REQUEST_TIMEOUT || '30' }}
           REQUEST_MAX_RETRIES: ${{ vars.REQUEST_MAX_RETRIES || '3' }}
           REQUEST_RETRY_DELAY: ${{ vars.REQUEST_RETRY_DELAY || '2' }}
           DEFAULT_PERIODOS_COUNT: ${{ vars.DEFAULT_PERIODOS_COUNT || '8' }}
-          
-          # Período objetivo a procesar
-          TARGET_PERIOD: ${{ inputs.target_period || vars.TARGET_PERIOD || '2026-1' }}
-          
-          # Logging
+          TARGET_PERIOD: "2025-2"
           LOG_LEVEL: INFO
           LOG_FILE: scraper.log
-          
-          # Cookies opcionales (si están configuradas)
           COOKIE_PHPSESSID: ${{ secrets.COOKIE_PHPSESSID || '' }}
           COOKIE_ASIGACAD: ${{ secrets.COOKIE_ASIGACAD || '' }}
         run: |
-          set -e  # Salir en caso de error
-          
-          echo "🚀 Iniciando scraper..."
+          set -e
+          echo "🚀 Iniciando scraper para período 2025-2..."
           echo "   Período objetivo: $TARGET_PERIOD"
-          echo "   Hoja fuente: ${{ inputs.source_worksheet || '2025-2' }}"
-          echo "   Columna: ${{ inputs.source_column || 'D' }}"
-          
           python main.py \
             --modo completo \
             --source-sheet-url "$SHEET_URL_SOURCE" \
@@ -216,7 +172,7 @@ jobs:
         if: failure() || steps.scrape_run.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: scraper-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          name: scraper-logs-2025-2-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
             scraper/scraper.log
           retention-days: 7
@@ -227,7 +183,6 @@ jobs:
         working-directory: ./scraper
         run: |
           if [ -f credentials.json ]; then
-            # Eliminar archivo de credenciales (ya no se necesita)
             rm -f credentials.json
             echo "✓ credentials.json eliminado por seguridad"
           fi
@@ -236,7 +191,6 @@ jobs:
         if: steps.scrape_run.outcome == 'failure'
         run: |
           echo "❌ El scraper falló con código de salida no cero."
-          echo "📋 Revisa los logs en los artifacts para más detalles."
           if [ -f scraper/scraper.log ]; then
             echo ""
             echo "Últimas 50 líneas del log:"
@@ -247,7 +201,7 @@ jobs:
       - name: Success summary
         if: success()
         run: |
-          echo "✅ Scraper ejecutado exitosamente"
+          echo "✅ Scraper ejecutado exitosamente para período 2025-2"
           if [ -f scraper/scraper.log ]; then
             echo ""
             echo "Resumen del log:"

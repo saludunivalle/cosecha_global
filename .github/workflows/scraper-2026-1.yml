@@ -1,4 +1,4 @@
-name: Ejecutar Scraper Univalle
+name: Scraper - Periodo 2026-1
 
 on:
   # Ejecutar automáticamente a las 3:00 AM hora Colombia (UTC-5) todos los días
@@ -9,10 +9,6 @@ on:
   # Permite ejecución manual desde GitHub Actions UI
   workflow_dispatch:
     inputs:
-      target_period:
-        description: 'Período objetivo a procesar (ej: 2026-1)'
-        required: false
-        default: '2026-1'
       source_worksheet:
         description: 'Hoja fuente (worksheet)'
         required: false
@@ -29,7 +25,7 @@ on:
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # Timeout de 1 hora para el job completo
+    timeout-minutes: 45  # Timeout de 45 minutos para un período
     
     steps:
       - name: Checkout repository
@@ -184,7 +180,7 @@ jobs:
           DEFAULT_PERIODOS_COUNT: ${{ vars.DEFAULT_PERIODOS_COUNT || '8' }}
           
           # Período objetivo a procesar
-          TARGET_PERIOD: ${{ inputs.target_period || vars.TARGET_PERIOD || '2026-1' }}
+          TARGET_PERIOD: "2026-1"
           
           # Logging
           LOG_LEVEL: INFO
@@ -196,7 +192,7 @@ jobs:
         run: |
           set -e  # Salir en caso de error
           
-          echo "🚀 Iniciando scraper..."
+          echo "🚀 Iniciando scraper para período 2026-1..."
           echo "   Período objetivo: $TARGET_PERIOD"
           echo "   Hoja fuente: ${{ inputs.source_worksheet || '2025-2' }}"
           echo "   Columna: ${{ inputs.source_column || 'D' }}"
@@ -216,7 +212,7 @@ jobs:
         if: failure() || steps.scrape_run.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: scraper-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          name: scraper-logs-2026-1-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
             scraper/scraper.log
           retention-days: 7
@@ -247,7 +243,7 @@ jobs:
       - name: Success summary
         if: success()
         run: |
-          echo "✅ Scraper ejecutado exitosamente"
+          echo "✅ Scraper ejecutado exitosamente para período 2026-1"
           if [ -f scraper/scraper.log ]; then
             echo ""
             echo "Resumen del log:"

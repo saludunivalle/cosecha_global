@@ -32,6 +32,18 @@ REQUEST_RETRY_DELAY = int(os.getenv('REQUEST_RETRY_DELAY', '2'))
 
 # Configuración de períodos
 DEFAULT_PERIODOS_COUNT = int(os.getenv('DEFAULT_PERIODOS_COUNT', '8'))
+TARGET_PERIOD = os.getenv('TARGET_PERIOD', '')
+
+# Google Sheets API Configuration
+SHEETS_READ_TIMEOUT = int(os.getenv('SHEETS_READ_TIMEOUT', '120'))  # segundos
+SHEETS_BATCH_SIZE = int(os.getenv('SHEETS_BATCH_SIZE', '1000'))  # filas por batch
+SHEETS_MAX_RETRIES = int(os.getenv('SHEETS_MAX_RETRIES', '5'))
+SHEETS_RETRY_DELAY = int(os.getenv('SHEETS_RETRY_DELAY', '5'))  # segundos iniciales
+SHEETS_BACKOFF_FACTOR = float(os.getenv('SHEETS_BACKOFF_FACTOR', '2'))  # multiplicador de delay
+
+# Rate limiting
+REQUESTS_PER_MINUTE = int(os.getenv('REQUESTS_PER_MINUTE', '60'))
+REQUEST_DELAY = float(os.getenv('REQUEST_DELAY', '1.0'))  # segundos entre requests
 
 # Configuración de logging
 LOG_LEVEL = os.getenv('LOG_LEVEL', 'INFO')
@@ -63,6 +75,10 @@ def validate_config():
         raise ValueError(
             "Falta variable de entorno requerida: GOOGLE_SHEETS_TARGET_ID o GOOGLE_SHEETS_SPREADSHEET_ID"
         )
+    
+    # TARGET_PERIOD es requerido para el flujo completo
+    # (pero puede estar vacío si se pasa como argumento en línea de comandos)
+    # La validación del formato se hace en period_manager.get_target_period()
     
     # Verificar que el archivo de credenciales existe si se especificó
     if GOOGLE_SHEETS_CREDENTIALS_PATH and not Path(GOOGLE_SHEETS_CREDENTIALS_PATH).exists():

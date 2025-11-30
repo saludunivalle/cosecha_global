@@ -1,0 +1,166 @@
+name: Scraper - Periodo 2023-2
+
+on:
+  # Ejecutar automáticamente a las 5:30 AM hora Colombia (UTC-5) todos los días
+  # Colombia UTC-5, entonces 5:30 AM COT = 10:30 AM UTC
+  schedule:
+    - cron: '30 10 * * *'
+  
+  workflow_dispatch:
+    inputs:
+      source_worksheet:
+        description: 'Hoja fuente (worksheet)'
+        required: false
+        default: '2025-2'
+      source_column:
+        description: 'Columna de cédulas'
+        required: false
+        default: 'D'
+      delay_cedulas:
+        description: 'Delay entre cédulas (segundos)'
+        required: false
+        default: '1.0'
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+      
+      - name: Install dependencies
+        working-directory: ./scraper
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      
+      - name: Create credentials.json from secret
+        working-directory: ./scraper
+        env:
+          GOOGLE_CREDENTIALS: ${{ secrets.GOOGLE_CREDENTIALS }}
+        run: |
+          if [ -z "$GOOGLE_CREDENTIALS" ]; then
+            echo "❌ Error: Secret GOOGLE_CREDENTIALS no está configurado"
+            exit 1
+          fi
+          
+          python3 << 'EOF'
+          import json
+          import os
+          import sys
+          credentials_str = os.environ.get('GOOGLE_CREDENTIALS', '')
+          if not credentials_str:
+              print("❌ Error: GOOGLE_CREDENTIALS está vacío", file=sys.stderr)
+              sys.exit(1)
+          try:
+              credentials_json = json.loads(credentials_str)
+              with open('credentials.json', 'w', encoding='utf-8') as f:
+                  json.dump(credentials_json, f, indent=2, ensure_ascii=False)
+              print("✓ JSON válido y credentials.json creado exitosamente")
+          except Exception as e:
+              print(f"❌ Error: {e}", file=sys.stderr)
+              sys.exit(1)
+          EOF
+          
+          if [ ! -f credentials.json ] || [ ! -s credentials.json ]; then
+            echo "❌ Error: credentials.json no se pudo crear o está vacío"
+            exit 1
+          fi
+          echo "✓ Archivo credentials.json verificado"
+      
+      - name: Validate required secrets
+        run: |
+          if [ -z "${{ secrets.SHEET_URL_SOURCE }}" ] || [ -z "${{ secrets.SHEET_URL_TARGET }}" ]; then
+            echo "❌ Error: Secrets requeridos no configurados"
+            exit 1
+          fi
+          echo "✓ Secrets validados"
+      
+      - name: Extract spreadsheet IDs from URLs
+        id: extract_ids
+        run: |
+          extract_sheet_id() {
+            echo "$1" | sed -n 's/.*\/spreadsheets\/d\/\([a-zA-Z0-9_-]\{44,\}\).*/\1/p'
+          }
+          SOURCE_ID=$(extract_sheet_id "${{ secrets.SHEET_URL_SOURCE }}")
+          TARGET_ID=$(extract_sheet_id "${{ secrets.SHEET_URL_TARGET }}")
+          if [ -z "$SOURCE_ID" ]; then SOURCE_ID="${{ secrets.SHEET_URL_SOURCE }}"; fi
+          if [ -z "$TARGET_ID" ]; then TARGET_ID="${{ secrets.SHEET_URL_TARGET }}"; fi
+          if [ -z "$SOURCE_ID" ] || [ -z "$TARGET_ID" ]; then
+            echo "❌ Error: No se pudo extraer IDs"
+            exit 1
+          fi
+          echo "source_id=$SOURCE_ID" >> $GITHUB_OUTPUT
+          echo "target_id=$TARGET_ID" >> $GITHUB_OUTPUT
+      
+      - name: Run scraper
+        working-directory: ./scraper
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_PATH: credentials.json
+          SHEET_SOURCE: ${{ steps.extract_ids.outputs.source_id }}
+          SHEET_TARGET: ${{ steps.extract_ids.outputs.target_id }}
+          GOOGLE_SHEETS_SOURCE_ID: ${{ steps.extract_ids.outputs.source_id }}
+          GOOGLE_SHEETS_TARGET_ID: ${{ steps.extract_ids.outputs.target_id }}
+          GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID || steps.extract_ids.outputs.target_id }}
+          SHEET_URL_SOURCE: ${{ secrets.SHEET_URL_SOURCE }}
+          SHEET_URL_TARGET: ${{ secrets.SHEET_URL_TARGET }}
+          UNIVALLE_BASE_URL: ${{ vars.UNIVALLE_BASE_URL || 'https://proxse26.univalle.edu.co/asignacion' }}
+          REQUEST_TIMEOUT: ${{ vars.REQUEST_TIMEOUT || '30' }}
+          REQUEST_MAX_RETRIES: ${{ vars.REQUEST_MAX_RETRIES || '3' }}
+          REQUEST_RETRY_DELAY: ${{ vars.REQUEST_RETRY_DELAY || '2' }}
+          DEFAULT_PERIODOS_COUNT: ${{ vars.DEFAULT_PERIODOS_COUNT || '8' }}
+          TARGET_PERIOD: "2023-2"
+          LOG_LEVEL: INFO
+          LOG_FILE: scraper.log
+          COOKIE_PHPSESSID: ${{ secrets.COOKIE_PHPSESSID || '' }}
+          COOKIE_ASIGACAD: ${{ secrets.COOKIE_ASIGACAD || '' }}
+        run: |
+          set -e
+          echo "🚀 Iniciando scraper para período 2023-2..."
+          python main.py \
+            --modo completo \
+            --source-sheet-url "$SHEET_URL_SOURCE" \
+            --target-sheet-url "$SHEET_URL_TARGET" \
+            --target-period "$TARGET_PERIOD" \
+            --source-worksheet "${{ inputs.source_worksheet || '2025-2' }}" \
+            --source-column "${{ inputs.source_column || 'D' }}" \
+            --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}
+        continue-on-error: true
+        id: scrape_run
+      
+      - name: Upload logs on error or failure
+        if: failure() || steps.scrape_run.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-logs-2023-2-${{ github.run_number }}-${{ github.run_attempt }}
+          path: scraper/scraper.log
+          retention-days: 7
+          if-no-files-found: ignore
+      
+      - name: Cleanup credentials
+        if: always()
+        working-directory: ./scraper
+        run: |
+          [ -f credentials.json ] && rm -f credentials.json && echo "✓ credentials.json eliminado"
+      
+      - name: Check scraper exit status
+        if: steps.scrape_run.outcome == 'failure'
+        run: |
+          echo "❌ El scraper falló"
+          [ -f scraper/scraper.log ] && tail -50 scraper/scraper.log
+          exit 1
+      
+      - name: Success summary
+        if: success()
+        run: |
+          echo "✅ Scraper ejecutado exitosamente para período 2023-2"
+          [ -f scraper/scraper.log ] && grep -E "(RESUMEN FINAL|Tiempo total|Cédulas|actividades)" scraper/scraper.log | tail -10
+
