@@ -11,6 +11,9 @@ import gspread
 from gspread.exceptions import APIError
 from oauth2client.service_account import ServiceAccountCredentials
 
+# Definir logger antes de usarlo
+logger = logging.getLogger(__name__)
+
 # Import opcional de googleapiclient (requiere google-api-python-client)
 try:
     from googleapiclient.discovery import build
@@ -46,8 +49,6 @@ from scraper.config.settings import (
     REQUEST_DELAY,
 )
 from scraper.utils.helpers import sanitizar_valor_hoja, validar_cedula, limpiar_cedula
-
-logger = logging.getLogger(__name__)
 
 
 class SheetsService:
