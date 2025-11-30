@@ -91,17 +91,67 @@ jobs:
           
           echo "✓ Secrets validados"
       
+      - name: Extract spreadsheet IDs from URLs
+        id: extract_ids
+        run: |
+          # Función para extraer ID de una URL de Google Sheets
+          extract_sheet_id() {
+            local url="$1"
+            # Extraer ID de URL: https://docs.google.com/spreadsheets/d/ID/edit
+            echo "$url" | sed -n 's/.*\/spreadsheets\/d\/\([a-zA-Z0-9_-]\{44,\}\).*/\1/p'
+          }
+          
+          SOURCE_URL="${{ secrets.SHEET_URL_SOURCE }}"
+          TARGET_URL="${{ secrets.SHEET_URL_TARGET }}"
+          
+          # Extraer IDs
+          SOURCE_ID=$(extract_sheet_id "$SOURCE_URL")
+          TARGET_ID=$(extract_sheet_id "$TARGET_URL")
+          
+          # Si no se pudo extraer de la URL, intentar usar el valor directamente (por si ya es un ID)
+          if [ -z "$SOURCE_ID" ]; then
+            SOURCE_ID="$SOURCE_URL"
+          fi
+          if [ -z "$TARGET_ID" ]; then
+            TARGET_ID="$TARGET_URL"
+          fi
+          
+          # Validar que tenemos IDs
+          if [ -z "$SOURCE_ID" ]; then
+            echo "❌ Error: No se pudo extraer ID de SHEET_URL_SOURCE"
+            exit 1
+          fi
+          if [ -z "$TARGET_ID" ]; then
+            echo "❌ Error: No se pudo extraer ID de SHEET_URL_TARGET"
+            exit 1
+          fi
+          
+          echo "✓ IDs extraídos:"
+          echo "  SOURCE_ID: ${SOURCE_ID:0:20}..."
+          echo "  TARGET_ID: ${TARGET_ID:0:20}..."
+          
+          # Guardar en outputs para usar en el siguiente paso
+          echo "source_id=$SOURCE_ID" >> $GITHUB_OUTPUT
+          echo "target_id=$TARGET_ID" >> $GITHUB_OUTPUT
+      
       - name: Run scraper
         working-directory: ./scraper
         env:
           # Credenciales de Google Sheets
           GOOGLE_SHEETS_CREDENTIALS_PATH: credentials.json
           
-          # Spreadsheet ID por defecto (puede extraerse de la URL target si es necesario)
-          # Si el scraper usa URLs directamente, esto puede estar vacío
-          GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID || '' }}
+          # IDs de las hojas (extraídos de las URLs)
+          SHEET_SOURCE: ${{ steps.extract_ids.outputs.source_id }}
+          SHEET_TARGET: ${{ steps.extract_ids.outputs.target_id }}
           
-          # URLs de las hojas (desde secrets)
+          # También configurar como GOOGLE_SHEETS_SOURCE_ID y GOOGLE_SHEETS_TARGET_ID
+          GOOGLE_SHEETS_SOURCE_ID: ${{ steps.extract_ids.outputs.source_id }}
+          GOOGLE_SHEETS_TARGET_ID: ${{ steps.extract_ids.outputs.target_id }}
+          
+          # Spreadsheet ID por defecto (legacy, usar SOURCE/TARGET en su lugar)
+          GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID || steps.extract_ids.outputs.target_id }}
+          
+          # URLs de las hojas (desde secrets, para uso en comandos)
           SHEET_URL_SOURCE: ${{ secrets.SHEET_URL_SOURCE }}
           SHEET_URL_TARGET: ${{ secrets.SHEET_URL_TARGET }}
           
