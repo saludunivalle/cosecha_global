@@ -80,7 +80,6 @@ def limpiar_departamento(departamento: str) -> str:
     Ejemplos:
         "DEPARTAMENTO MEDICINA INTERNA" -> "MEDICINA INTERNA"
         "DEPARTAMENTO DE CIRUGIA" -> "CIRUGIA"
-        "ESCUELA DE MEDICINA" -> "MEDICINA"
     
     Args:
         departamento: Nombre del departamento a limpiar
@@ -102,9 +101,6 @@ def limpiar_departamento(departamento: str) -> str:
         r'^DEPTO\s+DE\s+',
         r'^DEPTO\.\s*',
         r'^DEPTO\s+',
-        r'^ESCUELA\s+DE\s+',
-        r'^ESCUELA\s+',
-        r'^FACULTAD\s+DE\s+',
     ]
     
     for prefijo in prefijos:
@@ -114,6 +110,46 @@ def limpiar_departamento(departamento: str) -> str:
     dept = ' '.join(dept.split())
     
     return dept.strip()
+
+
+def limpiar_escuela(escuela: str) -> str:
+    """
+    Limpia el nombre de la escuela removiendo prefijos comunes.
+    
+    Ejemplos:
+        "ESCUELA DE MEDICINA" -> "MEDICINA"
+        "ESCUELA CIENCIAS BASICAS" -> "CIENCIAS BASICAS"
+        "FACULTAD DE SALUD" -> "SALUD"
+    
+    Args:
+        escuela: Nombre de la escuela a limpiar
+        
+    Returns:
+        Nombre de la escuela limpio (sin prefijo)
+    """
+    if not escuela:
+        return ''
+    
+    # Normalizar primero
+    esc = escuela.strip().upper()
+    
+    # Patrones a remover del inicio
+    prefijos = [
+        r'^ESCUELA\s+DE\s+',
+        r'^ESCUELA\s+',
+        r'^FACULTAD\s+DE\s+',
+        r'^FACULTAD\s+',
+        r'^INSTITUTO\s+DE\s+',
+        r'^INSTITUTO\s+',
+    ]
+    
+    for prefijo in prefijos:
+        esc = re.sub(prefijo, '', esc, flags=re.IGNORECASE)
+    
+    # Limpiar espacios múltiples
+    esc = ' '.join(esc.split())
+    
+    return esc.strip()
 
 
 def formatear_nombre_completo(

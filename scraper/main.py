@@ -344,18 +344,19 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
+    # 15 columnas según especificación
     headers = [
         'cedula', 'nombre profesor', 'escuela', 'departamento',
         'tipo actividad', 'categoría', 'nombre actividad',
         'número de horas', 'periodo', 'detalle actividad',
-        'actividad', 'vinculación', 'dedicación', 'nivel', 'cargo', 'departamento'
+        'actividad', 'vinculación', 'dedicación', 'nivel', 'cargo'
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
         try:
             logger.debug(f"Escribiendo {len(actividades)} actividades para período {periodo_label}")
             
-            # Convertir diccionarios a listas de valores
+            # Convertir diccionarios a listas de valores (15 columnas)
             filas = []
             for actividad in actividades:
                 fila = [
@@ -373,8 +374,7 @@ def escribir_actividades_en_hojas(
                     actividad.get('vinculacion', ''),
                     actividad.get('dedicacion', ''),
                     actividad.get('nivel', ''),
-                    actividad.get('cargo', ''),
-                    actividad.get('departamento', '')  # Duplicado según especificación
+                    actividad.get('cargo', '')
                 ]
                 filas.append(fila)
             

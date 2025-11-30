@@ -301,7 +301,7 @@ class PeriodManager:
         
         logger.info(f"Preparando hoja para período: {period}")
         
-        # Headers especificados
+        # Headers especificados (15 columnas)
         headers = [
             'cedula',
             'nombre profesor',
@@ -317,8 +317,7 @@ class PeriodManager:
             'vinculación',
             'dedicación',
             'nivel',
-            'cargo',
-            'departamento'
+            'cargo'
         ]
         
         # Obtener o crear conexión a la hoja de cálculo

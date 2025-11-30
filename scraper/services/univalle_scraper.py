@@ -30,6 +30,7 @@ from scraper.utils.helpers import (
     limpiar_cedula,
     normalizar_texto,
     limpiar_departamento,
+    limpiar_escuela,
     parsear_horas,
     generar_id_actividad,
     deduplicar_actividades,
@@ -878,15 +879,23 @@ class UnivalleScraper:
         """Procesa actividades de dirección de tesis."""
         actividades = []
         
-        # Identificar índice de columna de horas
+        # Identificar índices de columnas clave
         indice_horas = -1
+        indice_titulo = -1
+        indice_estudiante = -1
+        
         for j, header in enumerate(headers):
             header_upper = header.upper()
             if 'HORAS' in header_upper and 'SEMESTRE' in header_upper:
                 indice_horas = j
-                break
-            elif 'HORAS' in header_upper:
+            elif 'HORAS' in header_upper and indice_horas == -1:
                 indice_horas = j
+            if 'TITULO' in header_upper or 'TESIS' in header_upper:
+                indice_titulo = j
+            if 'ESTUDIANTE' in header_upper or 'CODIGO' in header_upper:
+                indice_estudiante = j
+        
+        logger.debug(f"Tesis - Índice horas: {indice_horas}, título: {indice_titulo}, estudiante: {indice_estudiante}")
         
         for i in range(1, len(filas)):
             celdas = self.extraer_celdas(filas[i])
@@ -896,6 +905,7 @@ class UnivalleScraper:
             
             actividad = {'PERIODO': id_periodo}
             
+            # Guardar todos los valores con sus headers
             for j, header in enumerate(headers):
                 if j < len(celdas):
                     valor = celdas[j].strip() if celdas[j] else ''
@@ -903,18 +913,42 @@ class UnivalleScraper:
                     actividad[header] = valor
                     actividad[header_norm] = valor
             
-            # Asegurar que HORAS SEMESTRE esté disponible
-            if 'HORAS SEMESTRE' not in actividad or not actividad['HORAS SEMESTRE']:
-                for key in ['Horas Semestre', 'HORAS', 'Horas']:
-                    if key in actividad and actividad[key]:
-                        actividad['HORAS SEMESTRE'] = actividad[key]
+            # Extraer TITULO DE LA TESIS (buscar diferentes variantes)
+            titulo = ''
+            for key in ['TITULO DE LA TESIS', 'TITULO', 'Titulo de la Tesis', 'Titulo', 'TESIS']:
+                if key in actividad and actividad[key]:
+                    titulo = actividad[key]
+                    break
+            if not titulo and indice_titulo >= 0 and indice_titulo < len(celdas):
+                titulo = celdas[indice_titulo].strip() if celdas[indice_titulo] else ''
+            actividad['TITULO DE LA TESIS'] = titulo
+            
+            # Extraer HORAS SEMESTRE
+            horas = ''
+            for key in ['HORAS SEMESTRE', 'Horas Semestre', 'HORAS', 'Horas']:
+                if key in actividad and actividad[key]:
+                    # Verificar que sea un número válido
+                    val = actividad[key].strip()
+                    if val and re.match(r'^\d+\.?\d*$', val):
+                        horas = val
                         break
-                
-                if (not actividad.get('HORAS SEMESTRE') and indice_horas >= 0 
-                    and indice_horas < len(celdas)):
-                    valor_horas = celdas[indice_horas].strip() if celdas[indice_horas] else ''
-                    if valor_horas and re.match(r'^\d+\.?\d*$', valor_horas):
-                        actividad['HORAS SEMESTRE'] = valor_horas
+            if not horas and indice_horas >= 0 and indice_horas < len(celdas):
+                valor_horas = celdas[indice_horas].strip() if celdas[indice_horas] else ''
+                if valor_horas and re.match(r'^\d+\.?\d*$', valor_horas):
+                    horas = valor_horas
+            actividad['HORAS SEMESTRE'] = horas
+            
+            # Extraer CODIGO ESTUDIANTE
+            estudiante = ''
+            for key in ['CODIGO ESTUDIANTE', 'Codigo Estudiante', 'ESTUDIANTE', 'Estudiante']:
+                if key in actividad and actividad[key]:
+                    estudiante = actividad[key]
+                    break
+            if not estudiante and indice_estudiante >= 0 and indice_estudiante < len(celdas):
+                estudiante = celdas[indice_estudiante].strip() if celdas[indice_estudiante] else ''
+            actividad['CODIGO ESTUDIANTE'] = estudiante
+            
+            logger.debug(f"Tesis procesada: título='{titulo}', horas='{horas}', estudiante='{estudiante}'")
             
             actividades.append(actividad)
         
@@ -962,15 +996,27 @@ class UnivalleScraper:
         """Procesa actividades genéricas."""
         actividades = []
         
-        # Identificar índice de columna de horas
+        # Identificar índices de columnas clave
         indice_horas = -1
+        indice_nombre = -1
+        indice_titulo = -1
+        indice_cargo = -1
+        indice_descripcion = -1
+        
         for j, header in enumerate(headers):
             header_upper = header.upper()
             if 'HORAS' in header_upper and 'SEMESTRE' in header_upper:
                 indice_horas = j
-                break
-            elif 'HORAS' in header_upper:
+            elif 'HORAS' in header_upper and indice_horas == -1:
                 indice_horas = j
+            if 'NOMBRE' in header_upper and 'ASIGNATURA' not in header_upper:
+                indice_nombre = j
+            if 'TITULO' in header_upper:
+                indice_titulo = j
+            if 'CARGO' in header_upper and 'DESCRIPCION' not in header_upper:
+                indice_cargo = j
+            if 'DESCRIPCION' in header_upper:
+                indice_descripcion = j
         
         for i in range(1, len(filas)):
             celdas = self.extraer_celdas(filas[i])
@@ -983,26 +1029,65 @@ class UnivalleScraper:
             for j, header in enumerate(headers):
                 if j < len(celdas):
                     valor = celdas[j].strip() if celdas[j] else ''
-                    # Normalizar nombre de header para facilitar búsqueda
                     header_norm = header.upper()
                     actividad[header] = valor
-                    # Guardar también con nombre normalizado para búsqueda más fácil
                     actividad[header_norm] = valor
             
-            # Asegurar que HORAS SEMESTRE esté disponible
-            if 'HORAS SEMESTRE' not in actividad or not actividad['HORAS SEMESTRE']:
-                # Buscar en otras variantes
-                for key in ['Horas Semestre', 'HORAS', 'Horas', 'HORA', 'Hora']:
-                    if key in actividad and actividad[key]:
-                        actividad['HORAS SEMESTRE'] = actividad[key]
+            # Extraer HORAS SEMESTRE (buscar en diferentes variantes)
+            horas = ''
+            for key in ['HORAS SEMESTRE', 'Horas Semestre', 'HORAS', 'Horas']:
+                if key in actividad and actividad[key]:
+                    val = actividad[key].strip()
+                    # Verificar que sea un número válido
+                    if val and re.match(r'^\d+\.?\d*$', val):
+                        horas = val
                         break
-                
-                # Si aún no hay horas, buscar en columna identificada
-                if (not actividad.get('HORAS SEMESTRE') and indice_horas >= 0 
-                    and indice_horas < len(celdas)):
-                    valor_horas = celdas[indice_horas].strip() if celdas[indice_horas] else ''
-                    if valor_horas and re.match(r'^\d+\.?\d*$', valor_horas):
-                        actividad['HORAS SEMESTRE'] = valor_horas
+            if not horas and indice_horas >= 0 and indice_horas < len(celdas):
+                valor_horas = celdas[indice_horas].strip() if celdas[indice_horas] else ''
+                if valor_horas and re.match(r'^\d+\.?\d*$', valor_horas):
+                    horas = valor_horas
+            actividad['HORAS SEMESTRE'] = horas
+            
+            # Extraer NOMBRE (buscar en diferentes variantes)
+            nombre = ''
+            for key in ['NOMBRE', 'Nombre', 'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION']:
+                if key in actividad and actividad[key]:
+                    nombre = actividad[key]
+                    break
+            if not nombre and indice_nombre >= 0 and indice_nombre < len(celdas):
+                nombre = celdas[indice_nombre].strip() if celdas[indice_nombre] else ''
+            actividad['NOMBRE'] = nombre
+            
+            # Extraer TITULO
+            titulo = ''
+            for key in ['TITULO', 'Titulo']:
+                if key in actividad and actividad[key]:
+                    titulo = actividad[key]
+                    break
+            if not titulo and indice_titulo >= 0 and indice_titulo < len(celdas):
+                titulo = celdas[indice_titulo].strip() if celdas[indice_titulo] else ''
+            actividad['TITULO'] = titulo
+            
+            # Extraer CARGO
+            cargo = ''
+            for key in ['CARGO', 'Cargo']:
+                if key in actividad and actividad[key]:
+                    cargo = actividad[key]
+                    break
+            if not cargo and indice_cargo >= 0 and indice_cargo < len(celdas):
+                cargo = celdas[indice_cargo].strip() if celdas[indice_cargo] else ''
+            actividad['CARGO'] = cargo
+            
+            # Extraer DESCRIPCION
+            descripcion = ''
+            for key in ['DESCRIPCION DEL CARGO', 'DESCRIPCION', 'Descripcion del Cargo', 'Descripcion']:
+                if key in actividad and actividad[key]:
+                    descripcion = actividad[key]
+                    break
+            if not descripcion and indice_descripcion >= 0 and indice_descripcion < len(celdas):
+                descripcion = celdas[indice_descripcion].strip() if celdas[indice_descripcion] else ''
+            actividad['DESCRIPCION DEL CARGO'] = descripcion
+            actividad['DESCRIPCION'] = descripcion
             
             actividades.append(actividad)
         
@@ -1428,11 +1513,17 @@ class UnivalleScraper:
         
         # Construir datos base compartidos
         nombre_completo = self._construir_nombre_completo(info)
-        escuela = info.unidad_academica or info.escuela or ''
+        
+        # Limpiar escuela: quitar prefijo "ESCUELA DE" o "FACULTAD DE"
+        escuela_raw = info.unidad_academica or info.escuela or ''
+        escuela = limpiar_escuela(escuela_raw)
+        logger.debug(f"Escuela: '{escuela_raw}' -> '{escuela}'")
+        
         # Limpiar departamento: quitar prefijo "DEPARTAMENTO" o "DEPARTAMENTO DE"
         departamento_raw = info.departamento or ''
         departamento = limpiar_departamento(departamento_raw)
         logger.debug(f"Departamento: '{departamento_raw}' -> '{departamento}'")
+        
         vinculacion = info.vinculacion or ''
         dedicacion = info.dedicacion or ''
         nivel = info.nivel_alcanzado or ''
@@ -1460,8 +1551,8 @@ class UnivalleScraper:
                 nombre_actividad=nombre_completo_actividad,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
-                detalle_actividad=f"{actividad.tipo} - Grupo {actividad.grupo}" if actividad.grupo else actividad.tipo,
-                actividad='Docencia',
+                detalle_actividad='DOCENCIA',  # Tipo de actividad
+                actividad=f"{actividad.tipo} - Grupo {actividad.grupo}" if actividad.grupo else actividad.tipo,
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -1490,8 +1581,8 @@ class UnivalleScraper:
                 nombre_actividad=nombre_completo_actividad,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
-                detalle_actividad=f"{actividad.tipo} - Grupo {actividad.grupo}" if actividad.grupo else actividad.tipo,
-                actividad='Docencia',
+                detalle_actividad='DOCENCIA',  # Tipo de actividad
+                actividad=f"{actividad.tipo} - Grupo {actividad.grupo}" if actividad.grupo else actividad.tipo,
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -1513,8 +1604,8 @@ class UnivalleScraper:
                 nombre_actividad=actividad.nombre_proyecto,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
-                detalle_actividad=actividad.aprobado_por,
-                actividad='Investigación',
+                detalle_actividad='INVESTIGACION',  # Tipo de actividad
+                actividad=actividad.aprobado_por or 'Proyecto de Investigación',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -1524,6 +1615,15 @@ class UnivalleScraper:
         
         # Procesar dirección de tesis
         for tesis in datos_docente.actividades_tesis:
+            # Obtener título de la tesis
+            titulo_tesis = tesis.get('TITULO DE LA TESIS', '') or tesis.get('Titulo de la Tesis', '') or tesis.get('TITULO', '')
+            # Obtener horas
+            horas_tesis = tesis.get('HORAS SEMESTRE', '') or tesis.get('Horas Semestre', '')
+            # Obtener código estudiante
+            codigo_est = tesis.get('CODIGO ESTUDIANTE', '') or tesis.get('Codigo Estudiante', '') or tesis.get('ESTUDIANTE', '')
+            
+            logger.debug(f"Tesis - título: '{titulo_tesis}', horas: '{horas_tesis}'")
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -1531,11 +1631,11 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Dirección de Tesis',
                 categoria=categoria_info,
-                nombre_actividad=tesis.get('TITULO DE LA TESIS', '') or tesis.get('Titulo de la Tesis', ''),
-                numero_horas=tesis.get('HORAS SEMESTRE', '') or tesis.get('Horas Semestre', ''),
+                nombre_actividad=titulo_tesis,
+                numero_horas=horas_tesis,
                 periodo=periodo_label,
-                detalle_actividad=f"Estudiante: {tesis.get('CODIGO ESTUDIANTE', '')}",
-                actividad='Dirección de Tesis',
+                detalle_actividad='DOCENCIA',  # Tipo de actividad según requerimiento
+                actividad=f"Estudiante: {codigo_est}" if codigo_est else 'Tesis',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -1554,8 +1654,8 @@ class UnivalleScraper:
                 nombre_actividad=actividad.get('NOMBRE', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad='',
-                actividad='Extensión',
+                detalle_actividad='EXTENSION',  # Tipo de actividad
+                actividad=actividad.get('TIPO', 'Extensión'),
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -1574,8 +1674,8 @@ class UnivalleScraper:
                 nombre_actividad=actividad.get('TITULO', '') or actividad.get('Titulo', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad=actividad.get('DESCRIPCION', ''),
-                actividad='Intelectual o Artística',
+                detalle_actividad='INTELECTUALES O ARTISTICAS',  # Tipo de actividad
+                actividad=actividad.get('DESCRIPCION', '') or 'Producción Intelectual',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -1594,8 +1694,8 @@ class UnivalleScraper:
                 nombre_actividad=actividad.get('CARGO', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad=actividad.get('DESCRIPCION DEL CARGO', ''),
-                actividad='Administrativa',
+                detalle_actividad='ADMINISTRATIVAS',  # Tipo de actividad
+                actividad=actividad.get('DESCRIPCION DEL CARGO', '') or actividad.get('DESCRIPCION', '') or 'Actividad Administrativa',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -1611,11 +1711,11 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Complementaria',
                 categoria=categoria_info,
-                nombre_actividad=actividad.get('PARTICIPACION EN', ''),
+                nombre_actividad=actividad.get('PARTICIPACION EN', '') or actividad.get('NOMBRE', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad=actividad.get('NOMBRE', ''),
-                actividad='Complementaria',
+                detalle_actividad='COMPLEMENTARIAS',  # Tipo de actividad
+                actividad=actividad.get('NOMBRE', '') or 'Actividad Complementaria',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -1634,8 +1734,8 @@ class UnivalleScraper:
                 nombre_actividad=actividad.get('DESCRIPCION', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad='',
-                actividad='Comisión',
+                detalle_actividad='DOCENTE EN COMISION',  # Tipo de actividad
+                actividad=actividad.get('TIPO DE COMISION', '') or 'Comisión',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
