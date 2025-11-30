@@ -582,6 +582,10 @@ def flujo_completo(
                     estadisticas['cedulas_procesadas'] += 1
                     logger.info(f"✓ {cedula_limpia}: {len(actividades_cedula)} actividades extraídas")
                 else:
+                    # Contar cédulas sin actividades separadamente
+                    if 'cedulas_sin_actividades' not in estadisticas:
+                        estadisticas['cedulas_sin_actividades'] = 0
+                    estadisticas['cedulas_sin_actividades'] += 1
                     logger.warning(f"⚠️ {cedula_limpia}: No se encontraron actividades para período {target_period}")
                 
                 cedulas_procesadas.append(cedula_limpia)
@@ -628,7 +632,8 @@ def flujo_completo(
         logger.info(f"Período procesado: {target_period}")
         logger.info(f"Tiempo total de ejecución: {tiempo_total:.2f} segundos ({tiempo_total/60:.2f} minutos)")
         logger.info(f"Cédulas leídas: {estadisticas['cedulas_leidas']}")
-        logger.info(f"Cédulas procesadas exitosamente: {estadisticas['cedulas_procesadas']}")
+        logger.info(f"Cédulas procesadas con actividades: {estadisticas['cedulas_procesadas']}")
+        logger.info(f"Cédulas sin actividades para el período: {estadisticas.get('cedulas_sin_actividades', 0)}")
         logger.info(f"Cédulas con errores: {estadisticas['cedulas_con_error']}")
         logger.info(f"Total actividades extraídas: {estadisticas['total_actividades']}")
         logger.info(f"Actividades para período {target_period}: {len(actividades_periodo)}")

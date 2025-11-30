@@ -29,6 +29,7 @@ from scraper.utils.helpers import (
     validar_cedula,
     limpiar_cedula,
     normalizar_texto,
+    limpiar_departamento,
     parsear_horas,
     generar_id_actividad,
     deduplicar_actividades,
@@ -877,6 +878,16 @@ class UnivalleScraper:
         """Procesa actividades de dirección de tesis."""
         actividades = []
         
+        # Identificar índice de columna de horas
+        indice_horas = -1
+        for j, header in enumerate(headers):
+            header_upper = header.upper()
+            if 'HORAS' in header_upper and 'SEMESTRE' in header_upper:
+                indice_horas = j
+                break
+            elif 'HORAS' in header_upper:
+                indice_horas = j
+        
         for i in range(1, len(filas)):
             celdas = self.extraer_celdas(filas[i])
             
@@ -887,7 +898,23 @@ class UnivalleScraper:
             
             for j, header in enumerate(headers):
                 if j < len(celdas):
-                    actividad[header] = celdas[j]
+                    valor = celdas[j].strip() if celdas[j] else ''
+                    header_norm = header.upper()
+                    actividad[header] = valor
+                    actividad[header_norm] = valor
+            
+            # Asegurar que HORAS SEMESTRE esté disponible
+            if 'HORAS SEMESTRE' not in actividad or not actividad['HORAS SEMESTRE']:
+                for key in ['Horas Semestre', 'HORAS', 'Horas']:
+                    if key in actividad and actividad[key]:
+                        actividad['HORAS SEMESTRE'] = actividad[key]
+                        break
+                
+                if (not actividad.get('HORAS SEMESTRE') and indice_horas >= 0 
+                    and indice_horas < len(celdas)):
+                    valor_horas = celdas[indice_horas].strip() if celdas[indice_horas] else ''
+                    if valor_horas and re.match(r'^\d+\.?\d*$', valor_horas):
+                        actividad['HORAS SEMESTRE'] = valor_horas
             
             actividades.append(actividad)
         
@@ -935,6 +962,16 @@ class UnivalleScraper:
         """Procesa actividades genéricas."""
         actividades = []
         
+        # Identificar índice de columna de horas
+        indice_horas = -1
+        for j, header in enumerate(headers):
+            header_upper = header.upper()
+            if 'HORAS' in header_upper and 'SEMESTRE' in header_upper:
+                indice_horas = j
+                break
+            elif 'HORAS' in header_upper:
+                indice_horas = j
+        
         for i in range(1, len(filas)):
             celdas = self.extraer_celdas(filas[i])
             
@@ -945,7 +982,27 @@ class UnivalleScraper:
             
             for j, header in enumerate(headers):
                 if j < len(celdas):
-                    actividad[header] = celdas[j]
+                    valor = celdas[j].strip() if celdas[j] else ''
+                    # Normalizar nombre de header para facilitar búsqueda
+                    header_norm = header.upper()
+                    actividad[header] = valor
+                    # Guardar también con nombre normalizado para búsqueda más fácil
+                    actividad[header_norm] = valor
+            
+            # Asegurar que HORAS SEMESTRE esté disponible
+            if 'HORAS SEMESTRE' not in actividad or not actividad['HORAS SEMESTRE']:
+                # Buscar en otras variantes
+                for key in ['Horas Semestre', 'HORAS', 'Horas', 'HORA', 'Hora']:
+                    if key in actividad and actividad[key]:
+                        actividad['HORAS SEMESTRE'] = actividad[key]
+                        break
+                
+                # Si aún no hay horas, buscar en columna identificada
+                if (not actividad.get('HORAS SEMESTRE') and indice_horas >= 0 
+                    and indice_horas < len(celdas)):
+                    valor_horas = celdas[indice_horas].strip() if celdas[indice_horas] else ''
+                    if valor_horas and re.match(r'^\d+\.?\d*$', valor_horas):
+                        actividad['HORAS SEMESTRE'] = valor_horas
             
             actividades.append(actividad)
         
@@ -1148,12 +1205,14 @@ class UnivalleScraper:
                 
                 if not actividades:
                     logger.warning("⚠️ No se encontraron actividades en el HTML")
-                    # Verificar si es página de login
+                    # Verificar si es página de login (esto sí es un error)
                     tiene_formulario = '<form' in html.lower() and 'periodo academico' in html.lower()
                     tiene_tablas = len(self.extraer_tablas(html)) < 2
                     if tiene_formulario and tiene_tablas:
                         raise ValueError("Página de login detectada - no se encontraron datos del docente")
-                    raise ValueError("El procesamiento HTML no devolvió actividades válidas")
+                    # No hay actividades para este docente/período - esto es normal, retornar lista vacía
+                    logger.info(f"ℹ️ Docente {cedula_limpia} sin actividades para el período {periodo_label}")
+                    return []
                 
                 # Validaciones robustas de calidad de datos
                 self._validar_actividades(actividades, cedula_limpia)
@@ -1370,7 +1429,10 @@ class UnivalleScraper:
         # Construir datos base compartidos
         nombre_completo = self._construir_nombre_completo(info)
         escuela = info.unidad_academica or info.escuela or ''
-        departamento = info.departamento or ''
+        # Limpiar departamento: quitar prefijo "DEPARTAMENTO" o "DEPARTAMENTO DE"
+        departamento_raw = info.departamento or ''
+        departamento = limpiar_departamento(departamento_raw)
+        logger.debug(f"Departamento: '{departamento_raw}' -> '{departamento}'")
         vinculacion = info.vinculacion or ''
         dedicacion = info.dedicacion or ''
         nivel = info.nivel_alcanzado or ''

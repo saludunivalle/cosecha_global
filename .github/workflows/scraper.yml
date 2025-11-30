@@ -24,12 +24,12 @@ on:
       delay_cedulas:
         description: 'Delay entre cédulas (segundos)'
         required: false
-        default: '1.0'
+        default: '0.5'
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # Timeout de 1 hora para el job completo
+    timeout-minutes: 360  # Timeout de 6 horas para procesar todas las cédulas
     
     steps:
       - name: Checkout repository

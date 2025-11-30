@@ -73,6 +73,49 @@ def normalizar_texto(texto: str) -> str:
     return texto.strip()
 
 
+def limpiar_departamento(departamento: str) -> str:
+    """
+    Limpia el nombre del departamento removiendo prefijos comunes.
+    
+    Ejemplos:
+        "DEPARTAMENTO MEDICINA INTERNA" -> "MEDICINA INTERNA"
+        "DEPARTAMENTO DE CIRUGIA" -> "CIRUGIA"
+        "ESCUELA DE MEDICINA" -> "MEDICINA"
+    
+    Args:
+        departamento: Nombre del departamento a limpiar
+        
+    Returns:
+        Nombre del departamento limpio (sin prefijo)
+    """
+    if not departamento:
+        return ''
+    
+    # Normalizar primero
+    dept = departamento.strip().upper()
+    
+    # Patrones a remover del inicio
+    prefijos = [
+        r'^DEPARTAMENTO\s+DE\s+',
+        r'^DEPARTAMENTO\s+',
+        r'^DEPTO\.\s*DE\s+',
+        r'^DEPTO\s+DE\s+',
+        r'^DEPTO\.\s*',
+        r'^DEPTO\s+',
+        r'^ESCUELA\s+DE\s+',
+        r'^ESCUELA\s+',
+        r'^FACULTAD\s+DE\s+',
+    ]
+    
+    for prefijo in prefijos:
+        dept = re.sub(prefijo, '', dept, flags=re.IGNORECASE)
+    
+    # Limpiar espacios múltiples
+    dept = ' '.join(dept.split())
+    
+    return dept.strip()
+
+
 def formatear_nombre_completo(
     nombre: str = '',
     apellido1: str = '',
