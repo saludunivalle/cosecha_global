@@ -336,71 +336,106 @@ class PeriodManager:
         nombre_hoja = period  # El nombre de la hoja es el período (ej: "2026-1")
         
         try:
-            # Intentar obtener la hoja
+            # Verificar si la hoja existe
+            worksheet = None
+            hoja_existe = False
+            
             try:
                 worksheet = spreadsheet.worksheet(nombre_hoja)
+                hoja_existe = True
                 logger.info(f"Hoja '{nombre_hoja}' existe, limpiando datos (manteniendo headers)")
-                
-                # Obtener todos los valores
-                todos_valores = worksheet.get_all_values()
-                
-                if len(todos_valores) > 0:
-                    # Verificar si la primera fila tiene headers
-                    primera_fila = todos_valores[0]
-                    
-                    # Limpiar todas las filas excepto la primera
-                    if len(todos_valores) > 1:
-                        # Borrar filas desde la 2 en adelante
-                        # gspread usa índice 1-based, así que fila 2 = índice 2
-                        ultima_fila = len(todos_valores)
-                        worksheet.delete_rows(2, ultima_fila)
-                        logger.debug(f"Eliminadas {ultima_fila - 1} filas de datos")
-                    
-                    # Verificar si los headers coinciden
-                    headers_existentes = [str(h).lower().strip() for h in primera_fila]
-                    headers_esperados = [str(h).lower().strip() for h in headers]
-                    
-                    # Si los headers no coinciden, actualizarlos
-                    if headers_existentes != headers_esperados:
-                        logger.info(f"Actualizando headers en hoja '{nombre_hoja}'")
-                        # Actualizar la primera fila con los headers correctos
-                        worksheet.update('A1', [headers])
-                    else:
-                        logger.debug(f"Headers correctos en hoja '{nombre_hoja}'")
-                else:
-                    # Hoja vacía, agregar headers
-                    logger.info(f"Hoja '{nombre_hoja}' está vacía, agregando headers")
-                    worksheet.append_row(headers)
-            
             except gspread.exceptions.WorksheetNotFound:
-                # Hoja no existe, crearla
-                logger.info(f"Hoja '{nombre_hoja}' no existe, creándola")
-                worksheet = spreadsheet.add_worksheet(
-                    title=nombre_hoja,
-                    rows=1000,
-                    cols=len(headers)
-                )
-                
-                # Agregar headers
-                worksheet.append_row(headers)
-                
-                logger.info(f"Hoja '{nombre_hoja}' creada con {len(headers)} columnas")
+                hoja_existe = False
+                logger.info(f"Hoja '{nombre_hoja}' no existe, será creada")
             
-            except Exception as e:
-                # Otro tipo de error, intentar crear
-                logger.warning(f"Error al acceder a hoja '{nombre_hoja}': {e}, intentando crear")
+            if hoja_existe and worksheet:
+                # Hoja existe, limpiar datos manteniendo headers
+                try:
+                    # Obtener todos los valores
+                    todos_valores = worksheet.get_all_values()
+                    
+                    if len(todos_valores) > 0:
+                        # Verificar si la primera fila tiene headers
+                        primera_fila = todos_valores[0]
+                        
+                        # Limpiar todas las filas excepto la primera
+                        # Usar batch_clear en lugar de delete_rows para evitar el error
+                        # "cannot delete all non-frozen rows"
+                        if len(todos_valores) > 1:
+                            # Calcular rango a limpiar (desde fila 2 hasta el final)
+                            ultima_fila = len(todos_valores)
+                            # Usar batch_clear para limpiar el contenido sin eliminar filas
+                            # Esto evita el error de "cannot delete all non-frozen rows"
+                            rango_limpiar = f'A2:Z{ultima_fila}'
+                            worksheet.batch_clear([rango_limpiar])
+                            logger.debug(f"Limpiado contenido de {ultima_fila - 1} filas de datos")
+                            
+                            # Si hay más de 1000 filas, limpiar también las filas extra
+                            # usando delete_rows solo si hay filas suficientes
+                            if ultima_fila > 1000:
+                                # Dejar solo la primera fila y algunas filas vacías
+                                # Eliminar desde la fila 1001 en adelante
+                                try:
+                                    worksheet.delete_rows(1001, ultima_fila)
+                                    logger.debug(f"Eliminadas filas adicionales (1001-{ultima_fila})")
+                                except Exception as del_err:
+                                    logger.warning(f"No se pudieron eliminar filas adicionales: {del_err}")
+                        
+                        # Verificar si los headers coinciden
+                        headers_existentes = [str(h).lower().strip() for h in primera_fila]
+                        headers_esperados = [str(h).lower().strip() for h in headers]
+                        
+                        # Si los headers no coinciden, actualizarlos
+                        if headers_existentes != headers_esperados:
+                            logger.info(f"Actualizando headers en hoja '{nombre_hoja}'")
+                            # Actualizar la primera fila con los headers correctos
+                            worksheet.update('A1', [headers])
+                        else:
+                            logger.debug(f"Headers correctos en hoja '{nombre_hoja}'")
+                    else:
+                        # Hoja vacía, agregar headers
+                        logger.info(f"Hoja '{nombre_hoja}' está vacía, agregando headers")
+                        worksheet.update('A1', [headers])
                 
-                # Crear nueva hoja
-                worksheet = spreadsheet.add_worksheet(
-                    title=nombre_hoja,
-                    rows=1000,
-                    cols=len(headers)
-                )
-                
-                # Agregar headers
-                worksheet.append_row(headers)
-                
-                logger.info(f"Hoja '{nombre_hoja}' creada con {len(headers)} columnas")
+                except Exception as e:
+                    logger.warning(f"Error al limpiar hoja '{nombre_hoja}': {e}")
+                    # Si falla la limpieza, intentar actualizar solo los headers
+                    try:
+                        worksheet.update('A1', [headers])
+                        logger.info(f"Headers actualizados en hoja '{nombre_hoja}'")
+                    except Exception as header_err:
+                        logger.error(f"Error al actualizar headers: {header_err}")
+                        raise
+            
+            else:
+                # Hoja no existe, crearla
+                # Verificar primero que realmente no existe (por si acaso)
+                try:
+                    worksheet = spreadsheet.worksheet(nombre_hoja)
+                    logger.info(f"Hoja '{nombre_hoja}' encontrada después de verificación")
+                except gspread.exceptions.WorksheetNotFound:
+                    # Realmente no existe, crearla
+                    logger.info(f"Creando hoja '{nombre_hoja}'")
+                    try:
+                        worksheet = spreadsheet.add_worksheet(
+                            title=nombre_hoja,
+                            rows=1000,
+                            cols=len(headers)
+                        )
+                        
+                        # Agregar headers
+                        worksheet.update('A1', [headers])
+                        
+                        logger.info(f"Hoja '{nombre_hoja}' creada con {len(headers)} columnas")
+                    except gspread.exceptions.APIError as api_err:
+                        # Si el error es que la hoja ya existe, obtenerla
+                        if 'already exists' in str(api_err).lower():
+                            logger.warning(f"Hoja '{nombre_hoja}' ya existe (creada por otro proceso), obteniéndola")
+                            worksheet = spreadsheet.worksheet(nombre_hoja)
+                            # Asegurar que tenga los headers correctos
+                            worksheet.update('A1', [headers])
+                        else:
+                            raise
         
         except Exception as e:
             logger.error(f"Error preparando hoja '{nombre_hoja}': {e}", exc_info=True)
