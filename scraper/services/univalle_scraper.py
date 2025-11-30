@@ -419,13 +419,155 @@ class UnivalleScraper:
         tiene_titulo = any('TITULO' in h or 'TESIS' in h for h in headers_upper)
         return tiene_estudiante and (tiene_plan or tiene_titulo)
     
+    def _extraer_datos_personales_con_soup(self, html: str, info: InformacionPersonal) -> None:
+        """
+        Extrae datos personales usando BeautifulSoup.
+        Basado en cómo lo hace web/ en personal-info.ts
+        
+        Args:
+            html: HTML completo del portal
+            info: Objeto InformacionPersonal a actualizar
+        """
+        try:
+            soup = BeautifulSoup(html, 'html.parser')
+            
+            # Buscar todas las tablas
+            tablas = soup.find_all('table')
+            
+            for tabla in tablas:
+                filas = tabla.find_all('tr')
+                if len(filas) < 2:
+                    continue
+                
+                # Verificar si es tabla de datos personales
+                primera_fila_texto = filas[0].get_text(strip=True).upper()
+                if 'CEDULA' not in primera_fila_texto and 'APELLIDO' not in primera_fila_texto:
+                    continue
+                
+                logger.debug("Tabla de datos personales encontrada con BeautifulSoup")
+                
+                # Procesar fila 2 (índice 1): CEDULA, APELLIDOS, NOMBRE, UNIDAD, DEPARTAMENTO
+                if len(filas) > 1:
+                    fila2 = filas[1]
+                    celdas_fila2 = fila2.find_all(['td', 'th'])
+                    
+                    for i, celda in enumerate(celdas_fila2):
+                        texto = celda.get_text(strip=True)
+                        if not texto:
+                            continue
+                        
+                        # Buscar en headers de la primera fila
+                        if len(filas) > 0:
+                            headers_fila1 = filas[0].find_all(['td', 'th'])
+                            if i < len(headers_fila1):
+                                header_texto = headers_fila1[i].get_text(strip=True).upper()
+                                
+                                if 'CEDULA' in header_texto or 'DOCUMENTO' in header_texto:
+                                    if not info.cedula:
+                                        info.cedula = texto
+                                elif '1 APELLIDO' in header_texto or header_texto == 'APELLIDO1':
+                                    if not info.apellido1:
+                                        info.apellido1 = texto
+                                elif '2 APELLIDO' in header_texto or header_texto == 'APELLIDO2':
+                                    if not info.apellido2:
+                                        info.apellido2 = texto
+                                elif header_texto == 'NOMBRE':
+                                    if not info.nombre:
+                                        info.nombre = texto
+                                elif 'UNIDAD' in header_texto and 'ACADEMICA' in header_texto:
+                                    if not info.unidad_academica:
+                                        info.unidad_academica = texto
+                                elif 'DEPARTAMENTO' in header_texto or 'DPTO' in header_texto:
+                                    if not info.departamento:
+                                        info.departamento = texto
+                                        logger.debug(f"DEPARTAMENTO encontrado con BeautifulSoup: '{texto}'")
+                                elif 'CARGO' in header_texto:
+                                    if not info.cargo:
+                                        info.cargo = texto
+                                        logger.debug(f"CARGO encontrado con BeautifulSoup: '{texto}'")
+                        
+                        # Fallback: buscar por posición (columna 4 según análisis)
+                        if i == 4 and not info.departamento:
+                            if 'DEPARTAMENTO' in texto.upper() or 'DPTO' in texto.upper():
+                                info.departamento = texto
+                                logger.debug(f"DEPARTAMENTO encontrado por posición con BeautifulSoup: '{texto}'")
+                
+                # Procesar fila 4 (índice 3): VINCULACION, CATEGORIA, DEDICACION, NIVEL, CENTRO COSTO
+                if len(filas) > 3:
+                    fila4 = filas[3]
+                    celdas_fila4 = fila4.find_all(['td', 'th'])
+                    
+                    # Buscar headers de fila 3 (índice 2) si existen
+                    headers_fila3 = []
+                    if len(filas) > 2:
+                        headers_fila3 = filas[2].find_all(['td', 'th'])
+                    
+                    for i, celda in enumerate(celdas_fila4):
+                        texto = celda.get_text(strip=True)
+                        if not texto:
+                            continue
+                        
+                        if i < len(headers_fila3):
+                            header_texto = headers_fila3[i].get_text(strip=True).upper()
+                            
+                            if 'VINCULACION' in header_texto or 'VINCULACIÓN' in header_texto:
+                                if not info.vinculacion:
+                                    info.vinculacion = texto
+                            elif 'CATEGORIA' in header_texto or 'CATEGORÍA' in header_texto:
+                                if not info.categoria:
+                                    info.categoria = texto
+                            elif 'DEDICACION' in header_texto or 'DEDICACIÓN' in header_texto:
+                                if not info.dedicacion:
+                                    info.dedicacion = texto
+                            elif 'NIVEL' in header_texto and 'ALCANZADO' in header_texto:
+                                if not info.nivel_alcanzado:
+                                    info.nivel_alcanzado = texto
+                            elif 'CENTRO' in header_texto and 'COSTO' in header_texto:
+                                if not info.centro_costo:
+                                    info.centro_costo = texto
+                            elif 'CARGO' in header_texto:
+                                if not info.cargo:
+                                    info.cargo = texto
+                                    logger.debug(f"CARGO encontrado en fila 4 con BeautifulSoup: '{texto}'")
+                            elif 'DEPARTAMENTO' in header_texto or 'DPTO' in header_texto:
+                                if not info.departamento:
+                                    info.departamento = texto
+                                    logger.debug(f"DEPARTAMENTO encontrado en fila 4 con BeautifulSoup: '{texto}'")
+                
+                # Buscar cargo y departamento en filas adicionales (formato campo=valor)
+                for i in range(4, min(len(filas), 10)):
+                    fila = filas[i]
+                    celdas = fila.find_all(['td', 'th'])
+                    
+                    if len(celdas) >= 2:
+                        for j in range(len(celdas) - 1):
+                            campo = celdas[j].get_text(strip=True).upper()
+                            valor = celdas[j + 1].get_text(strip=True)
+                            
+                            if 'CARGO' in campo and not info.cargo:
+                                info.cargo = valor
+                                logger.debug(f"CARGO encontrado en fila {i+1} con BeautifulSoup: '{valor}'")
+                            elif ('DEPARTAMENTO' in campo or 'DPTO' in campo) and not info.departamento:
+                                info.departamento = valor
+                                logger.debug(f"DEPARTAMENTO encontrado en fila {i+1} con BeautifulSoup: '{valor}'")
+                            elif 'ESCUELA' in campo and not info.escuela:
+                                info.escuela = valor
+                
+                # Si encontramos datos en esta tabla, podemos salir
+                if info.cedula or info.nombre:
+                    break
+                    
+        except Exception as e:
+            logger.warning(f"Error al extraer datos personales con BeautifulSoup: {e}")
+            # Continuar con método regex como fallback
+    
     def _procesar_informacion_personal(
         self,
         tabla_html: str,
         filas: List[str],
         info: InformacionPersonal
     ):
-        """Procesa información personal."""
+        """Procesa información personal usando regex (método original)."""
         if len(filas) < 4:
             return
         
@@ -433,10 +575,10 @@ class UnivalleScraper:
         valores_fila2 = self.extraer_celdas(filas[1])
         valores_fila4 = self.extraer_celdas(filas[3])
         
-        # Mapear valores de fila 2
+        # Mapear valores de fila 2 (datos básicos: CEDULA, APELLIDOS, NOMBRE, UNIDAD, DEPARTAMENTO)
         for i, header in enumerate(headers):
             if i < len(valores_fila2):
-                valor = valores_fila2[i]
+                valor = valores_fila2[i].strip() if valores_fila2[i] else ''
                 header_upper = header.upper()
                 
                 if 'CEDULA' in header_upper:
@@ -449,14 +591,70 @@ class UnivalleScraper:
                     info.nombre = valor
                 elif 'UNIDAD' in header_upper and 'ACADEMICA' in header_upper:
                     info.unidad_academica = valor
+                elif 'ESCUELA' in header_upper:
+                    info.escuela = valor
+                elif 'DEPARTAMENTO' in header_upper or 'DPTO' in header_upper:
+                    info.departamento = valor
+                    logger.debug(f"DEPARTAMENTO encontrado en fila 2, columna {i}: '{valor}'")
+                elif 'CARGO' in header_upper:
+                    info.cargo = valor
+                    logger.debug(f"CARGO encontrado en fila 2, columna {i}: '{valor}'")
         
-        # Mapear valores de fila 4
-        if len(valores_fila4) >= 5:
+        # Si DEPARTAMENTO no se encontró por header, intentar por posición (columna 4 según análisis)
+        if not info.departamento and len(valores_fila2) > 4:
+            # Columna 4 (índice 4) según análisis HTML
+            valor_posicion_4 = valores_fila2[4].strip() if valores_fila2[4] else ''
+            if valor_posicion_4 and 'DEPARTAMENTO' in valor_posicion_4.upper():
+                info.departamento = valor_posicion_4
+                logger.debug(f"DEPARTAMENTO encontrado por posición (columna 4): '{valor_posicion_4}'")
+        
+        # Mapear valores de fila 4 usando headers si están disponibles
+        if len(filas) > 3:
+            headers_fila4 = self.extraer_celdas(filas[2]) if len(filas) > 2 else []
+            for i, header in enumerate(headers_fila4 if headers_fila4 else []):
+                if i < len(valores_fila4):
+                    valor = valores_fila4[i]
+                    header_upper = header.upper()
+                    
+                    if 'VINCULACION' in header_upper or 'VINCULACIÓN' in header_upper:
+                        info.vinculacion = valor
+                    elif 'CATEGORIA' in header_upper or 'CATEGORÍA' in header_upper:
+                        info.categoria = valor
+                    elif 'DEDICACION' in header_upper or 'DEDICACIÓN' in header_upper:
+                        info.dedicacion = valor
+                    elif 'NIVEL' in header_upper and 'ALCANZADO' in header_upper:
+                        info.nivel_alcanzado = valor
+                    elif 'CENTRO' in header_upper and 'COSTO' in header_upper:
+                        info.centro_costo = valor
+                    elif 'CARGO' in header_upper:
+                        info.cargo = valor
+                    elif 'DEPARTAMENTO' in header_upper or 'DPTO' in header_upper:
+                        info.departamento = valor
+                    elif 'ESCUELA' in header_upper:
+                        info.escuela = valor
+        
+        # Si no se encontraron por headers, usar posición por defecto (compatibilidad)
+        if len(valores_fila4) >= 5 and not info.vinculacion:
             info.vinculacion = valores_fila4[0]
             info.categoria = valores_fila4[1]
             info.dedicacion = valores_fila4[2]
             info.nivel_alcanzado = valores_fila4[3]
             info.centro_costo = valores_fila4[4]
+        
+        # Buscar cargo y departamento en filas adicionales
+        for i in range(4, min(len(filas), 10)):  # Buscar en filas 5-10
+            celdas = self.extraer_celdas(filas[i])
+            for j, celda in enumerate(celdas):
+                celda_upper = celda.upper().strip()
+                if j + 1 < len(celdas):
+                    valor_siguiente = celdas[j + 1].strip()
+                    
+                    if 'CARGO' in celda_upper and not info.cargo:
+                        info.cargo = valor_siguiente
+                    elif ('DEPARTAMENTO' in celda_upper or 'DPTO' in celda_upper) and not info.departamento:
+                        info.departamento = valor_siguiente
+                    elif 'ESCUELA' in celda_upper and not info.escuela:
+                        info.escuela = valor_siguiente
     
     def _procesar_asignaturas(
         self,
@@ -468,6 +666,17 @@ class UnivalleScraper:
         pregrado = []
         postgrado = []
         
+        # Identificar índice de columna de horas
+        indice_horas = -1
+        for j, header in enumerate(headers):
+            header_upper = header.upper()
+            if ('HORAS' in header_upper and 'SEMESTRE' in header_upper) or \
+               (header_upper == 'HORAS SEMESTRE') or \
+               ('HORAS' in header_upper and 'TOTAL' not in header_upper and 'PORC' not in header_upper):
+                indice_horas = j
+                logger.debug(f"Columna de horas identificada: índice {j}, header: '{header}'")
+                break
+        
         for i in range(1, len(filas)):
             celdas = self.extraer_celdas(filas[i])
             
@@ -476,21 +685,49 @@ class UnivalleScraper:
             
             actividad = ActividadAsignatura(periodo=id_periodo)
             
+            # Identificar índices de columnas clave
+            indice_codigo = -1
+            indice_nombre = -1
+            indice_porc = -1
+            
+            for j, header in enumerate(headers):
+                header_upper = header.upper()
+                if 'CODIGO' in header_upper and 'ESTUDIANTE' not in header_upper:
+                    indice_codigo = j
+                elif 'NOMBRE' in header_upper and 'ASIGNATURA' in header_upper:
+                    indice_nombre = j
+                elif 'PORC' in header_upper:
+                    indice_porc = j
+            
+            # Extraer valores de cada columna con limpieza
             for j, header in enumerate(headers):
                 if j < len(celdas):
-                    valor = celdas[j]
+                    valor = celdas[j].strip() if celdas[j] else ''
                     header_upper = header.upper()
                     
-                    if 'CODIGO' in header_upper:
+                    if 'CODIGO' in header_upper and 'ESTUDIANTE' not in header_upper:
                         actividad.codigo = valor
                     elif 'GRUPO' in header_upper:
                         actividad.grupo = valor
                     elif 'TIPO' in header_upper:
                         actividad.tipo = valor
                     elif 'NOMBRE' in header_upper and 'ASIGNATURA' in header_upper:
-                        actividad.nombre_asignatura = valor
-                    elif 'HORAS' in header_upper:
-                        actividad.horas_semestre = valor
+                        # Limpiar nombre de asignatura: remover porcentajes y espacios extra
+                        nombre_limpio = valor
+                        # Remover porcentajes si están al final (ej: "Nombre 2%")
+                        nombre_limpio = re.sub(r'\s*\d+%$', '', nombre_limpio).strip()
+                        # Remover espacios múltiples
+                        nombre_limpio = re.sub(r'\s+', ' ', nombre_limpio).strip()
+                        actividad.nombre_asignatura = nombre_limpio
+                    elif ('HORAS' in header_upper and 'SEMESTRE' in header_upper) or \
+                         (header_upper == 'HORAS SEMESTRE') or \
+                         (j == indice_horas):
+                        # Usar columna identificada o cualquier columna con HORAS (excepto PORC)
+                        if not actividad.horas_semestre or ('SEMESTRE' in header_upper) or (j == indice_horas):
+                            # Asegurar que no sea la columna PORC
+                            if j != indice_porc:
+                                actividad.horas_semestre = valor
+                                logger.debug(f"Horas extraídas: '{valor}' de columna '{header}' (índice {j})")
                     elif 'CRED' in header_upper:
                         actividad.cred = valor
                     elif 'PORC' in header_upper:
@@ -500,11 +737,73 @@ class UnivalleScraper:
                     elif 'INTEN' in header_upper:
                         actividad.inten = valor
             
-            if actividad.codigo or actividad.nombre_asignatura:
-                if self._es_postgrado(actividad):
-                    postgrado.append(actividad)
+            # Si no se encontraron horas por header, buscar en celdas numéricas
+            if not actividad.horas_semestre or not actividad.horas_semestre.strip():
+                for j, valor in enumerate(celdas):
+                    if j < len(headers):
+                        header_upper = headers[j].upper()
+                        # Evitar columnas conocidas que no son horas
+                        if 'PORC' in header_upper or 'CRED' in header_upper or 'FREC' in header_upper or 'INTEN' in header_upper:
+                            continue
+                        # Evitar columna de código
+                        if j == indice_codigo:
+                            continue
+                        # Buscar valores numéricos que podrían ser horas
+                        valor_limpio = valor.strip() if valor else ''
+                        if valor_limpio and re.match(r'^\d+\.?\d*$', valor_limpio):
+                            # Si es un número y no es código (códigos suelen tener letras)
+                            if not actividad.codigo or valor_limpio != actividad.codigo:
+                                actividad.horas_semestre = valor_limpio
+                                logger.debug(f"Horas encontradas por búsqueda numérica: '{valor_limpio}' en columna '{headers[j]}'")
+                                break
+            
+            # Validaciones y conversión de horas a número
+            horas_valida = False
+            if actividad.horas_semestre and actividad.horas_semestre.strip():
+                try:
+                    # Limpiar horas: remover caracteres no numéricos excepto punto
+                    horas_limpia = re.sub(r'[^\d.]', '', actividad.horas_semestre)
+                    if horas_limpia:
+                        horas_numero = float(horas_limpia)
+                        if horas_numero > 0:
+                            actividad.horas_semestre = str(horas_numero)
+                            horas_valida = True
+                        else:
+                            logger.warning(f"Horas debe ser mayor a 0, encontrado: {horas_numero}")
+                            actividad.horas_semestre = ''
+                except (ValueError, TypeError):
+                    logger.warning(f"No se pudo convertir horas a número: '{actividad.horas_semestre}'")
+                    actividad.horas_semestre = ''
+            
+            # Validaciones de nombre de actividad
+            nombre_valido = False
+            if actividad.nombre_asignatura:
+                nombre_limpio = actividad.nombre_asignatura.strip()
+                # Validar que no termine en porcentaje
+                if nombre_limpio and not nombre_limpio.endswith('%'):
+                    # Validar que tenga longitud razonable
+                    if len(nombre_limpio) > 3:  # Mínimo 4 caracteres
+                        nombre_valido = True
+                    else:
+                        logger.warning(f"Nombre de actividad muy corto: '{nombre_limpio}'")
                 else:
-                    pregrado.append(actividad)
+                    logger.warning(f"Nombre de actividad termina en porcentaje (incorrecto): '{nombre_limpio}'")
+            
+            # Solo agregar actividad si tiene datos válidos
+            if (actividad.codigo or actividad.nombre_asignatura) and nombre_valido:
+                # Log de actividad extraída
+                logger.debug(f"Actividad extraída: codigo='{actividad.codigo}', nombre='{actividad.nombre_asignatura}', horas='{actividad.horas_semestre}'")
+                
+                # Validación final antes de agregar
+                if horas_valida or not actividad.horas_semestre:  # Permitir sin horas si no se encontraron
+                    if self._es_postgrado(actividad):
+                        postgrado.append(actividad)
+                    else:
+                        pregrado.append(actividad)
+                else:
+                    logger.warning(f"Actividad omitida por horas inválidas: codigo='{actividad.codigo}', nombre='{actividad.nombre_asignatura}'")
+            else:
+                logger.warning(f"Actividad omitida por datos inválidos: codigo='{actividad.codigo}', nombre='{actividad.nombre_asignatura}'")
         
         return pregrado, postgrado
     
@@ -856,6 +1155,9 @@ class UnivalleScraper:
                         raise ValueError("Página de login detectada - no se encontraron datos del docente")
                     raise ValueError("El procesamiento HTML no devolvió actividades válidas")
                 
+                # Validaciones robustas de calidad de datos
+                self._validar_actividades(actividades, cedula_limpia)
+                
                 logger.info(f"✅ Scraping exitoso: {len(actividades)} actividades encontradas")
                 logger.info(f"{'='*60}\n")
                 
@@ -902,6 +1204,91 @@ class UnivalleScraper:
         raise requests.RequestException(
             f"Error al scrapear datos del profesor {cedula_limpia} después de {max_retries} intentos: {ultimo_error}"
         )
+    
+    def _validar_actividades(
+        self,
+        actividades: List[Dict[str, Any]],
+        cedula: str
+    ) -> None:
+        """
+        Valida la calidad de las actividades extraídas.
+        
+        Args:
+            actividades: Lista de actividades a validar
+            cedula: Cédula del profesor (para logging)
+        
+        No lanza excepciones, solo registra errores para análisis.
+        """
+        if not actividades:
+            logger.warning(f"⚠️ No hay actividades para validar (cédula: {cedula})")
+            return
+        
+        logger.info(f"🔍 Validando {len(actividades)} actividades para cédula {cedula}...")
+        
+        total_errores = 0
+        actividades_con_errores = 0
+        
+        for idx, act in enumerate(actividades, 1):
+            errores = []
+            
+            # Validar nombre de actividad
+            nombre_actividad = act.get('nombre_actividad', '')
+            if not nombre_actividad or not nombre_actividad.strip():
+                errores.append(f"Nombre actividad vacío o faltante")
+            elif nombre_actividad.strip().endswith('%'):
+                errores.append(f"Nombre actividad termina en porcentaje: '{nombre_actividad}'")
+            elif len(nombre_actividad.strip()) < 4:
+                errores.append(f"Nombre actividad muy corto: '{nombre_actividad}'")
+            
+            # Validar horas
+            horas = act.get('numero_horas', 0)
+            # Convertir a número si es string
+            if isinstance(horas, str):
+                try:
+                    horas = float(horas) if horas.strip() else 0
+                except (ValueError, AttributeError):
+                    horas = 0
+            
+            if horas <= 0:
+                errores.append(f"Horas inválidas o faltantes: {horas}")
+            
+            # Validar cargo
+            cargo = act.get('cargo', '')
+            if not cargo or not cargo.strip():
+                errores.append("Cargo faltante")
+            
+            # Validar departamento
+            departamento = act.get('departamento', '')
+            if not departamento or not departamento.strip():
+                errores.append("Departamento faltante")
+            
+            # Validar cédula
+            if not act.get('cedula') or act.get('cedula') != cedula:
+                errores.append(f"Cédula no coincide: esperada '{cedula}', encontrada '{act.get('cedula')}'")
+            
+            # Validar nombre de profesor
+            if not act.get('nombre_profesor') or not act.get('nombre_profesor').strip():
+                errores.append("Nombre de profesor faltante")
+            
+            # Si hay errores, registrarlos
+            if errores:
+                actividades_con_errores += 1
+                total_errores += len(errores)
+                
+                logger.error(
+                    f"❌ Validación fallida para actividad #{idx} (cédula {cedula}): "
+                    f"{', '.join(errores)}"
+                )
+                logger.debug(f"   Actividad problemática: {act}")
+        
+        # Resumen de validación
+        if total_errores > 0:
+            logger.warning(
+                f"⚠️ Validación completada: {actividades_con_errores}/{len(actividades)} actividades "
+                f"con errores ({total_errores} errores totales)"
+            )
+        else:
+            logger.info(f"✅ Validación exitosa: todas las {len(actividades)} actividades son válidas")
     
     def _extraer_actividades_desde_html(
         self,
@@ -969,6 +1356,9 @@ class UnivalleScraper:
                 tabla_html, filas, headers, headers_upper, id_periodo, resultado
             )
         
+        # Extraer información personal usando BeautifulSoup (método principal)
+        self._extraer_datos_personales_con_soup(html, resultado.informacion_personal)
+        
         # Extraer información personal desde texto plano como fallback
         self._extraer_info_personal_desde_texto_plano(html, resultado.informacion_personal)
         
@@ -991,6 +1381,13 @@ class UnivalleScraper:
         
         # Procesar actividades de pregrado
         for actividad in datos_docente.actividades_pregrado:
+            # Combinar código y nombre: "626001C - HISTORIA IDEAS EN CIENCIAS DE LA SALUD"
+            nombre_completo_actividad = actividad.nombre_asignatura
+            if actividad.codigo and actividad.nombre_asignatura:
+                nombre_completo_actividad = f"{actividad.codigo} - {actividad.nombre_asignatura}"
+            elif actividad.codigo:
+                nombre_completo_actividad = actividad.codigo
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -998,7 +1395,7 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Pregrado',
                 categoria=categoria_info,
-                nombre_actividad=actividad.nombre_asignatura,
+                nombre_actividad=nombre_completo_actividad,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 detalle_actividad=f"{actividad.tipo} - Grupo {actividad.grupo}" if actividad.grupo else actividad.tipo,
@@ -1014,6 +1411,13 @@ class UnivalleScraper:
         
         # Procesar actividades de postgrado
         for actividad in datos_docente.actividades_postgrado:
+            # Combinar código y nombre: "626001C - HISTORIA IDEAS EN CIENCIAS DE LA SALUD"
+            nombre_completo_actividad = actividad.nombre_asignatura
+            if actividad.codigo and actividad.nombre_asignatura:
+                nombre_completo_actividad = f"{actividad.codigo} - {actividad.nombre_asignatura}"
+            elif actividad.codigo:
+                nombre_completo_actividad = actividad.codigo
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -1021,7 +1425,7 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Postgrado',
                 categoria=categoria_info,
-                nombre_actividad=actividad.nombre_asignatura,
+                nombre_actividad=nombre_completo_actividad,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 detalle_actividad=f"{actividad.tipo} - Grupo {actividad.grupo}" if actividad.grupo else actividad.tipo,
@@ -1207,17 +1611,35 @@ class UnivalleScraper:
         Returns:
             Diccionario con todos los campos de la actividad
         """
+        # Limpiar y validar nombre de actividad
+        nombre_actividad_limpio = str(nombre_actividad).strip()
+        
+        # Validación: nombre no debe terminar en porcentaje
+        if nombre_actividad_limpio.endswith('%'):
+            logger.warning(f"Nombre de actividad termina en porcentaje (incorrecto): '{nombre_actividad_limpio}'")
+            # Intentar limpiar: remover porcentaje al final
+            nombre_actividad_limpio = re.sub(r'\s*\d+%$', '', nombre_actividad_limpio).strip()
+        
+        # Validación: nombre debe tener longitud razonable
+        if nombre_actividad_limpio and len(nombre_actividad_limpio) < 4:
+            logger.warning(f"Nombre de actividad muy corto: '{nombre_actividad_limpio}'")
+        
         # Parsear horas a número si es posible
         horas_numero = parsear_horas(numero_horas)
         
-        return {
+        # Validación: horas debe ser mayor a 0 si hay actividad
+        if nombre_actividad_limpio and horas_numero == 0:
+            logger.warning(f"Actividad '{nombre_actividad_limpio}' tiene 0 horas - puede ser un error")
+        
+        # Construir diccionario
+        actividad_dict = {
             'cedula': str(cedula),
             'nombre_profesor': str(nombre_profesor),
             'escuela': str(escuela),
             'departamento': str(departamento),
             'tipo_actividad': str(tipo_actividad),
             'categoria': str(categoria),
-            'nombre_actividad': str(nombre_actividad),
+            'nombre_actividad': nombre_actividad_limpio,
             'numero_horas': horas_numero,
             'periodo': str(periodo),
             'detalle_actividad': str(detalle_actividad),
@@ -1228,6 +1650,20 @@ class UnivalleScraper:
             'cargo': str(cargo),
             **kwargs  # Incluir campos adicionales si existen
         }
+        
+        # Validaciones finales (solo en modo debug para no interrumpir ejecución)
+        if logger.isEnabledFor(logging.DEBUG):
+            if actividad_dict['nombre_actividad']:
+                assert not actividad_dict['nombre_actividad'].endswith('%'), \
+                    f"Nombre de actividad incorrecto (termina en %): '{actividad_dict['nombre_actividad']}'"
+                assert len(actividad_dict['nombre_actividad']) > 3, \
+                    f"Nombre muy corto: '{actividad_dict['nombre_actividad']}'"
+            
+            if actividad_dict['numero_horas'] > 0:
+                assert actividad_dict['numero_horas'] > 0, \
+                    f"Horas debe ser mayor a 0, encontrado: {actividad_dict['numero_horas']}"
+        
+        return actividad_dict
     
     def _extraer_info_personal_desde_texto_plano(self, html: str, info: InformacionPersonal):
         """
