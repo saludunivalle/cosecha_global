@@ -157,6 +157,7 @@ jobs:
       
       - name: Run scraper for all periods
         working-directory: ./scraper
+        timeout-minutes: 180  # Timeout de 3 horas por período individual
         env:
           # Credenciales de Google Sheets
           GOOGLE_SHEETS_CREDENTIALS_PATH: credentials.json
@@ -178,15 +179,16 @@ jobs:
           
           # Configuración del scraper (opcional, con defaults)
           UNIVALLE_BASE_URL: ${{ vars.UNIVALLE_BASE_URL || 'https://proxse26.univalle.edu.co/asignacion' }}
-          REQUEST_TIMEOUT: ${{ vars.REQUEST_TIMEOUT || '30' }}
-          REQUEST_MAX_RETRIES: ${{ vars.REQUEST_MAX_RETRIES || '3' }}
-          REQUEST_RETRY_DELAY: ${{ vars.REQUEST_RETRY_DELAY || '2' }}
+          REQUEST_TIMEOUT: ${{ vars.REQUEST_TIMEOUT || '60' }}  # Aumentado a 60 segundos
+          REQUEST_MAX_RETRIES: ${{ vars.REQUEST_MAX_RETRIES || '5' }}  # Más reintentos
+          REQUEST_RETRY_DELAY: ${{ vars.REQUEST_RETRY_DELAY || '3' }}  # Más delay entre reintentos
           DEFAULT_PERIODOS_COUNT: ${{ vars.DEFAULT_PERIODOS_COUNT || '8' }}
           
           # Configuración de Google Sheets API (timeouts y reintentos)
-          SHEETS_READ_TIMEOUT: ${{ vars.SHEETS_READ_TIMEOUT || '60' }}
-          SHEETS_MAX_RETRIES: ${{ vars.SHEETS_MAX_RETRIES || '3' }}
-          SHEETS_RETRY_DELAY: ${{ vars.SHEETS_RETRY_DELAY || '5' }}
+          SHEETS_READ_TIMEOUT: ${{ vars.SHEETS_READ_TIMEOUT || '120' }}  # Aumentado a 2 minutos
+          SHEETS_MAX_RETRIES: ${{ vars.SHEETS_MAX_RETRIES || '5' }}  # Más reintentos
+          SHEETS_RETRY_DELAY: ${{ vars.SHEETS_RETRY_DELAY || '10' }}  # Más delay entre reintentos
+          SHEETS_BATCH_SIZE: ${{ vars.SHEETS_BATCH_SIZE || '100' }}  # Lotes más pequeños para evitar timeouts
           
           # Logging
           LOG_LEVEL: INFO
@@ -231,8 +233,19 @@ jobs:
             echo "   Columna: ${{ inputs.source_column || 'D' }}"
             echo ""
             
+            # Iniciar keep-alive en background para evitar timeout por inactividad
+            # GitHub Actions detiene el job si no hay output por mucho tiempo
+            (
+              while true; do
+                sleep 300  # 5 minutos
+                echo "   [Keep-Alive] Procesando... ($(date '+%H:%M:%S'))"
+              done
+            ) &
+            KEEPALIVE_PID=$!
+            
             # Ejecutar scraper para este período
-            if python main.py \
+            PERIOD_START_TIME=$(date +%s)
+            if timeout 7200 python main.py \
               --modo completo \
               --source-sheet-url "$SHEET_URL_SOURCE" \
               --target-sheet-url "$SHEET_URL_TARGET" \
@@ -241,10 +254,22 @@ jobs:
               --source-column "${{ inputs.source_column || 'D' }}" \
               --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}; then
               
+              # Detener keep-alive
+              kill $KEEPALIVE_PID 2>/dev/null || true
+              wait $KEEPALIVE_PID 2>/dev/null || true
+              
+              PERIOD_END_TIME=$(date +%s)
+              PERIOD_DURATION=$((PERIOD_END_TIME - PERIOD_START_TIME))
+              PERIOD_DURATION_MIN=$((PERIOD_DURATION / 60))
+              
               echo ""
-              echo "✅ Período $PERIOD completado exitosamente"
+              echo "✅ Período $PERIOD completado exitosamente en ${PERIOD_DURATION_MIN} minutos"
               SUCCESSFUL=$((SUCCESSFUL + 1))
             else
+              # Detener keep-alive
+              kill $KEEPALIVE_PID 2>/dev/null || true
+              wait $KEEPALIVE_PID 2>/dev/null || true
+              
               echo ""
               echo "❌ Error al procesar período $PERIOD"
               FAILED=$((FAILED + 1))
@@ -260,11 +285,11 @@ jobs:
               echo "⏳ Esperando 40 minutos antes del siguiente período ($NEXT_PERIOD)..."
               echo "   Próximo inicio estimado: $(date -d '+40 minutes' '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -v +40M '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo 'en 40 minutos')"
               
-              # Sleep en chunks de 1 minuto para poder ver progreso
+              # Sleep en chunks de 1 minuto para poder ver progreso y evitar idle timeout
               for min in {1..40}; do
                 sleep 60
-                if [ $((min % 10)) -eq 0 ]; then
-                  echo "   ... $((40 - min)) minutos restantes"
+                if [ $((min % 5)) -eq 0 ]; then
+                  echo "   ... $((40 - min)) minutos restantes hasta siguiente período"
                 fi
               done
               
