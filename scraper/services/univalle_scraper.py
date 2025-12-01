@@ -507,6 +507,55 @@ class UnivalleScraper:
         
         return ""
     
+    def _extraer_nombre_actividad(self, fila_celdas, tipo_seccion: str) -> str:
+        """
+        Extrae el nombre/descripción de la actividad según la sección.
+        
+        Este método trabaja directamente con celdas de BeautifulSoup (td/th),
+        buscando primero el HEADER y luego tomando el valor de la celda siguiente.
+        
+        Args:
+            fila_celdas: Lista de celdas de la fila (objetos BeautifulSoup)
+            tipo_seccion: Tipo de sección (DOCENCIA, INVESTIGACION, ADMINISTRATIVAS, COMISION, etc.)
+        
+        Returns:
+            str: Nombre de la actividad (contenido de la celda de valor)
+        """
+        tipo_upper = (tipo_seccion or "").upper()
+        
+        # Definir columnas a buscar según el tipo de sección
+        if "DOCENCIA" in tipo_upper:
+            columnas_buscar = ["NOMBRE DE ASIGNATURA", "NOMBRE ASIGNATURA", "ASIGNATURA"]
+        elif "INVESTIGACION" in tipo_upper:
+            columnas_buscar = ["NOMBRE", "NOMBRE PROYECTO", "TITULO", "TÍTULO", "DESCRIPCION", "DESCRIPCIÓN"]
+        elif "ADMINISTRATIVAS" in tipo_upper or "COMISION" in tipo_upper:
+            columnas_buscar = [
+                "DESCRIPCION DEL CARGO",
+                "DESCRIPCIÓN DEL CARGO",
+                "DESCRIPCIÓN CARGO",
+                "DESCRIPCION CARGO",
+                "CARGO",
+                "NOMBRE",
+            ]
+        else:
+            # EXTENSION, INTELECTUALES, COMPLEMENTARIAS u otras
+            columnas_buscar = ["NOMBRE", "DESCRIPCION", "DESCRIPCIÓN", "TITULO", "TÍTULO"]
+        
+        # Buscar la columna en la fila (patrón header -> valor siguiente)
+        for i, celda in enumerate(fila_celdas):
+            texto_celda = celda.get_text(strip=True).upper()
+            
+            for columna_objetivo in columnas_buscar:
+                if columna_objetivo in texto_celda:
+                    # La siguiente celda en la MISMA FILA contiene el valor
+                    if i + 1 < len(fila_celdas):
+                        valor = fila_celdas[i + 1].get_text(strip=True)
+                        if valor:
+                            return valor
+        
+        logger.warning(f"⚠️ No se encontró nombre de actividad para tipo_seccion={tipo_seccion}")
+        return ""
+    
     def _extraer_horas_semestre(self, fila_celdas) -> float:
         """
         Extrae las horas del semestre de una fila.
@@ -546,6 +595,84 @@ class UnivalleScraper:
         except Exception as e:
             logger.warning(f"⚠️ Error al extraer HORAS SEMESTRE: {e}")
             return 0.0
+    
+    def _extraer_actividades_docencia(self, tabla) -> List[Dict[str, Any]]:
+        """
+        Extrae actividades de docencia (pregrado, posgrado, tesis) desde una tabla HTML.
+        
+        La tabla tiene una estructura con un título general "ACTIVIDADES DE DOCENCIA"
+        y subsecciones internas marcadas por filas con texto:
+            - "PREGRADO"
+            - "POSGRADO"
+            - "TESIS" (normalmente "TESIS" + "DIRECCION/DIRECCIÓN")
+        
+        Las filas que aparecen DESPUÉS de cada subtítulo pertenecen a esa subsección
+        hasta que aparece otro subtítulo o termina la tabla.
+        
+        Returns:
+            list: Lista de actividades con tipo_actividad correcto:
+                  {
+                      "tipo_actividad": "pregrado" | "posgrado" | "tesis",
+                      "nombre_actividad": str,
+                      "horas_semestre": float,
+                      "actividad_global": "docencia",
+                  }
+        """
+        actividades: List[Dict[str, Any]] = []
+        subseccion_actual: Optional[str] = None  # "pregrado", "posgrado" o "tesis"
+        
+        filas = tabla.find_all('tr')
+        
+        for fila in filas:
+            celdas = fila.find_all(['td', 'th'])
+            if not celdas:
+                continue
+            
+            # Texto completo de la fila para detectar subtítulos
+            texto_completo = ' '.join([c.get_text(strip=True) for c in celdas]).upper()
+            
+            # Detectar cambio de subsección
+            if "PREGRADO" in texto_completo and "POSGRADO" not in texto_completo:
+                subseccion_actual = "pregrado"
+                logger.info("   📚 Detectada subsección: PREGRADO")
+                continue
+            elif "POSGRADO" in texto_completo:
+                subseccion_actual = "posgrado"
+                logger.info("   📚 Detectada subsección: POSGRADO")
+                continue
+            elif "TESIS" in texto_completo and ("DIREC" in texto_completo or "DIR." in texto_completo):
+                subseccion_actual = "tesis"
+                logger.info("   📚 Detectada subsección: TESIS")
+                continue
+            
+            # Si no es un header de subsección, puede ser una fila de actividad
+            if not subseccion_actual:
+                continue
+            
+            # Verificar si la fila parece contener una asignatura (heurística por "ASIGNATURA")
+            tiene_asignatura = any(
+                "ASIGNATURA" in c.get_text(strip=True).upper()
+                for c in celdas
+            )
+            
+            if not tiene_asignatura:
+                continue
+            
+            # Extraer nombre de actividad y horas usando helpers
+            nombre_actividad = self._extraer_nombre_actividad(celdas, "DOCENCIA")
+            horas = self._extraer_horas_semestre(celdas)
+            
+            if nombre_actividad:
+                actividad = {
+                    "tipo_actividad": subseccion_actual,   # pregrado, posgrado o tesis
+                    "nombre_actividad": nombre_actividad,
+                    "horas_semestre": horas,
+                    "actividad_global": "docencia",
+                }
+                actividades.append(actividad)
+                logger.info(f"      ✅ {subseccion_actual}: {nombre_actividad} ({horas}h)")
+        
+        return actividades
     
     def _extraer_escuela_departamento(self, unidad_academica: str) -> tuple[str, str]:
         """
