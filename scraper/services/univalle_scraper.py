@@ -7,6 +7,7 @@ import re
 import logging
 import time
 import random
+import traceback
 from typing import Dict, List, Tuple, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -1532,13 +1533,21 @@ class UnivalleScraper:
                 
                 return actividades
                 
+            except (NameError, AttributeError, KeyError, TypeError) as e:
+                # Errores de código Python: NO reintentar, propagar inmediatamente
+                logger.error(f"❌ Error de código en cédula {cedula_limpia}: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                raise
+            
             except requests.Timeout as e:
+                # Errores de timeout: SÍ reintentar
                 ultimo_error = e
                 logger.warning(f"⏱️  Timeout en intento {intento}/{max_retries}: {e}")
                 if intento < max_retries:
-                    logger.info(f"🔄 Reintentando...")
-                    
+                    logger.info("🔄 Reintentando...")
+            
             except requests.HTTPError as e:
+                # HTTPError es subtipo de RequestException, manejar códigos recuperables/no recuperables
                 ultimo_error = e
                 status_code = e.response.status_code if e.response else 'unknown'
                 logger.warning(f"❌ Error HTTP {status_code} en intento {intento}/{max_retries}: {e}")
@@ -1549,24 +1558,26 @@ class UnivalleScraper:
                     raise
                 
                 if intento < max_retries:
-                    logger.info(f"🔄 Reintentando...")
-                    
+                    logger.info("🔄 Reintentando...")
+            
             except ValueError as e:
-                # Errores de validación no se reintentan
+                # Errores de validación: NO reintentar
                 logger.error(f"❌ Error de validación: {e}")
                 raise
-                
-            except requests.RequestException as e:
+            
+            except (requests.RequestException, ConnectionError) as e:
+                # Otros errores de red (RequestException genérico, ConnectionError): SÍ reintentar
                 ultimo_error = e
                 logger.warning(f"🔌 Error de conexión en intento {intento}/{max_retries}: {e}")
                 if intento < max_retries:
-                    logger.info(f"🔄 Reintentando...")
-                    
+                    logger.info("🔄 Reintentando...")
+            
             except Exception as e:
+                # Cualquier otro error inesperado se considera de código: NO reintentar
                 ultimo_error = e
-                logger.error(f"💥 Error inesperado en intento {intento}/{max_retries}: {e}", exc_info=True)
-                if intento < max_retries:
-                    logger.info(f"🔄 Reintentando...")
+                logger.error(f"💥 Error inesperado en intento {intento}/{max_retries}: {e}")
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                raise
         
         # Si llegamos aquí, todos los intentos fallaron
         logger.error(f"❌ Todos los intentos fallaron después de {max_retries} intentos")
@@ -1677,6 +1688,15 @@ class UnivalleScraper:
         Returns:
             Lista de diccionarios, cada uno representa una actividad
         """
+        cedula_limpia = cedula
+        
+        # Logging detallado de parámetros de entrada
+        logger.info("📋 Parámetros recibidos:")
+        logger.info(f"   - cedula: {cedula}")
+        logger.info(f"   - id_periodo: {id_periodo}")
+        logger.info(f"   - periodo_label: {periodo_label}")
+        logger.info(f"   - len(html): {len(html)}")
+        
         actividades = []
         
         # Procesar HTML directamente (sin hacer nueva petición)
