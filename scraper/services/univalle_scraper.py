@@ -776,74 +776,90 @@ class UnivalleScraper:
 
     def _procesar_actividades_docencia(self, soup: BeautifulSoup) -> List[Dict[str, Any]]:
         """
-        Procesa todas las actividades de docencia (pregrado, posgrado, tesis) a partir del HTML parseado.
+        Procesa PREGRADO, POSGRADO y TESIS.
+        Maneja el caso de secciones vacías.
         """
         actividades: List[Dict[str, Any]] = []
-        
-        # Extraer todas las tablas
         todas_tablas = soup.find_all('table')
         
-        for tabla in todas_tablas:
-            # Verificar si es tabla de asignaturas
-            if not self._es_tabla_asignaturas_html(tabla):
-                continue
-            
+        for i, tabla in enumerate(todas_tablas):
             # Buscar subtítulo en tablas anteriores
-            subtitulo = self._encontrar_subtitulo_anterior(tabla, todas_tablas)
+            subtitulo = None
+            for j in range(max(0, i - 5), i):
+                tabla_anterior = todas_tablas[j]
+                texto = tabla_anterior.get_text(strip=True).upper()
+                
+                if "PREGRADO" in texto and "POSGRADO" not in texto and "TOTAL" not in texto:
+                    subtitulo = "pregrado"
+                    break
+                elif "POSTGRADO" in texto and "TOTAL" not in texto:
+                    subtitulo = "posgrado"
+                    break
+                elif "DIRECCION" in texto and "TESIS" in texto:
+                    subtitulo = "tesis"
+                    break
             
-            # Extraer headers y filas
-            filas = tabla.find_all('tr')
-            if len(filas) < 2:
+            # Si no hay subtítulo, no es tabla de docencia
+            if not subtitulo:
                 continue
             
-            headers_row = filas[0]
-            headers = [c.get_text(strip=True).upper() for c in headers_row.find_all(['td', 'th'])]
+            # Verificar tipo de tabla
+            texto_tabla = tabla.get_text(strip=True).upper()
             
-            # Procesar cada fila de datos
-            for fila in filas[1:]:
-                celdas = fila.find_all(['td', 'th'])
-                if not celdas:
+            # Tabla de TESIS (headers diferentes)
+            if subtitulo == "tesis" and "CODIGO ESTUDIANTE" in texto_tabla:
+                logger.info("   📝 Procesando tabla de TESIS...")
+                actividades.extend(self._procesar_tabla_tesis(tabla))
+                continue
+            
+            # Tabla de ASIGNATURAS (pregrado/posgrado)
+            if "NOMBRE DE ASIGNATURA" in texto_tabla and "HORAS SEMESTRE" in texto_tabla:
+                logger.info(f"   📖 Procesando tabla de {subtitulo.upper()}...")
+                
+                filas = tabla.find_all('tr')
+                if len(filas) < 2:
+                    logger.warning(f"   ⚠️ Tabla de {subtitulo} vacía o sin filas de datos")
                     continue
                 
-                valores = [c.get_text(strip=True) for c in celdas]
-                if not any(valores):
-                    continue
+                # Extraer headers
+                headers_row = filas[0]
+                headers = [c.get_text(strip=True).upper() for c in headers_row.find_all(['td', 'th'])]
                 
-                # Mapear headers → valores
-                obj = dict(zip(headers, valores))
-                
-                # Normalizar estructura
-                actividad_norm = self._normalizar_estructura_asignatura(obj, headers)
-                
-                # Ignorar filas sin datos mínimos
-                if not actividad_norm.get("CODIGO") and not actividad_norm.get("NOMBRE DE ASIGNATURA"):
-                    continue
-                
-                # Determinar tipo de actividad
-                if subtitulo:
+                # Procesar filas de datos
+                for fila in filas[1:]:
+                    celdas = fila.find_all(['td', 'th'])
+                    valores = [c.get_text(strip=True) for c in celdas]
+                    
+                    if len(valores) < 2:  # Fila vacía
+                        continue
+                    
+                    # Mapear headers → valores
+                    obj = dict(zip(headers, valores))
+                    
+                    # Normalizar estructura
+                    actividad_norm = self._normalizar_estructura_asignatura(obj, headers)
+                    
+                    # Validar datos mínimos
+                    if not actividad_norm.get("NOMBRE DE ASIGNATURA"):
+                        continue
+                    
+                    # Usar subtítulo encontrado
                     tipo_actividad = subtitulo
-                else:
-                    # Fallback: clasificar por código
-                    tipo_actividad = "posgrado" if self._es_actividad_postgrado(actividad_norm) else "pregrado"
-                
-                # Construir actividad
-                horas_valor = actividad_norm.get("HORAS SEMESTRE", "0")
-                horas_semestre = self._parsear_horas(horas_valor)
-                
-                actividad = {
-                    "tipo_actividad": tipo_actividad,
-                    "nombre_actividad": actividad_norm.get("NOMBRE DE ASIGNATURA", ""),
-                    "horas_semestre": horas_semestre,
-                    "actividad_global": "docencia" if tipo_actividad != "tesis" else "tesis",
-                    "codigo": actividad_norm.get("CODIGO", ""),
-                }
-                
-                if actividad["nombre_actividad"]:
-                    actividades.append(actividad)
-                    logger.info(
-                        f"      ✅ {tipo_actividad.upper()}: "
-                        f"{actividad['codigo']} - {actividad['nombre_actividad']} ({actividad['horas_semestre']}h)"
-                    )
+                    
+                    actividad = {
+                        "tipo_actividad": tipo_actividad,
+                        "nombre_actividad": actividad_norm.get("NOMBRE DE ASIGNATURA", ""),
+                        "horas_semestre": self._parsear_horas(actividad_norm.get("HORAS SEMESTRE", "0")),
+                        "actividad_global": "docencia",
+                        "codigo": actividad_norm.get("CODIGO", "")
+                    }
+                    
+                    if actividad["nombre_actividad"]:
+                        actividades.append(actividad)
+                        logger.info(
+                            f"      ✅ {tipo_actividad.upper()}: "
+                            f"{actividad['codigo']} - {actividad['nombre_actividad']} ({actividad['horas_semestre']}h)"
+                        )
         
         return actividades
 
