@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime
 from collections import defaultdict
+import json
+import os
 
 try:
     from tqdm import tqdm
@@ -344,12 +346,23 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 15 columnas según especificación
+    # 15 columnas según especificación (orden correcto para Google Sheets)
     headers = [
-        'cedula', 'nombre profesor', 'escuela', 'departamento',
-        'tipo actividad', 'categoría', 'nombre actividad',
-        'número de horas', 'periodo', 'detalle actividad',
-        'actividad', 'vinculación', 'dedicación', 'nivel', 'cargo'
+        'Cedula',
+        'Nombre Profesor',
+        'Escuela',
+        'Departamento',
+        'Tipo de Actividad',
+        'Detalle actividad',
+        'Nombre de actividad',
+        'Número de horas',
+        'Período',
+        'Actividad',
+        'Vinculación',
+        'Categoría',
+        'Dedicación',
+        'Nivel',
+        'Cargo',
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
@@ -359,24 +372,39 @@ def escribir_actividades_en_hojas(
             # Convertir diccionarios a listas de valores (15 columnas)
             filas = []
             for actividad in actividades:
-                fila = [
-                    actividad.get('cedula', ''),
-                    actividad.get('nombre_profesor', ''),
-                    actividad.get('escuela', ''),
-                    actividad.get('departamento', ''),
-                    actividad.get('tipo_actividad', ''),
-                    actividad.get('categoria', ''),
-                    actividad.get('nombre_actividad', ''),
-                    actividad.get('numero_horas', ''),
-                    actividad.get('periodo', ''),
-                    actividad.get('detalle_actividad', ''),
-                    actividad.get('actividad', ''),
-                    actividad.get('vinculacion', ''),
-                    actividad.get('dedicacion', ''),
-                    actividad.get('nivel', ''),
-                    actividad.get('cargo', '')
+                # Asegurar que el número de horas nunca sea vacío/None
+                horas_semestre = actividad.get('numero_horas', 0.0)
+                if horas_semestre in ('', None):
+                    horas_semestre = 0.0
+                
+                row_data = [
+                    actividad.get('cedula', ''),             # 1. Cedula
+                    actividad.get('nombre_profesor', ''),    # 2. Nombre Profesor
+                    actividad.get('escuela', ''),            # 3. Escuela
+                    actividad.get('departamento', ''),       # 4. Departamento
+                    actividad.get('tipo_actividad', ''),     # 5. Tipo de Actividad
+                    actividad.get('detalle_actividad', ''),  # 6. Detalle actividad
+                    actividad.get('nombre_actividad', ''),   # 7. Nombre de actividad
+                    horas_semestre,                          # 8. Número de horas (float, nunca vacío)
+                    actividad.get('periodo', ''),            # 9. Período
+                    actividad.get('actividad', ''),          # 10. Actividad global
+                    actividad.get('vinculacion', ''),        # 11. Vinculación
+                    actividad.get('categoria', ''),          # 12. Categoría
+                    actividad.get('dedicacion', ''),         # 13. Dedicación
+                    actividad.get('nivel', ''),              # 14. Nivel
+                    actividad.get('cargo', ''),              # 15. Cargo
                 ]
-                filas.append(fila)
+                
+                # Validar cantidad de columnas antes de escribir
+                if len(row_data) != 15:
+                    logger.error(f"Fila con número incorrecto de columnas ({len(row_data)}): {row_data}")
+                    continue
+                
+                filas.append(row_data)
+
+            if not filas:
+                logger.warning(f"No hay filas válidas para escribir en período {periodo_label}")
+                continue
             
             # Escribir en batch a la hoja del período
             nombre_hoja = periodo_label
@@ -548,70 +576,136 @@ def flujo_completo(
             errores_criticos.append(error_msg)
             raise
         
-        # 6. Scrapear cada cédula para el período objetivo
+        # 6. Scrapear cada cédula para el período objetivo (con soporte de checkpoint)
         logger.info(f"\n[PASO 6/7] Scrapeando {len(cedulas)} cédulas para período {target_period}...")
+        
+        # Archivo de checkpoint (por período)
+        checkpoint_file = f"checkpoint_{target_period.replace('-', '_')}.json"
+        
+        # Cargar cédulas ya procesadas si existe checkpoint
+        cedulas_procesadas: List[str] = []
+        if os.path.exists(checkpoint_file):
+            try:
+                with open(checkpoint_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    cedulas_procesadas = data.get("cedulas_procesadas", [])
+                logger.info(f"🔁 Checkpoint encontrado: {len(cedulas_procesadas)} cédulas ya procesadas")
+            except Exception as e:
+                logger.warning(f"⚠️ No se pudo cargar checkpoint '{checkpoint_file}': {e}")
+        
+        # Filtrar pendientes respetando max_cedulas aplicado antes
+        cedulas_pendientes = [c for c in cedulas if limpiar_cedula(c) not in cedulas_procesadas]
+        total_cedulas = len(cedulas)
+        total_pendientes = len(cedulas_pendientes)
+        
+        logger.info(
+            f"📊 Total cédulas a procesar en hoja: {total_cedulas} | "
+            f"Ya procesadas (checkpoint): {len(cedulas_procesadas)} | "
+            f"Pendientes: {total_pendientes}"
+        )
         
         # Acumulador de actividades para el período
         actividades_periodo: List[Dict[str, Any]] = []
+        errores_cedulas: List[str] = []
         
-        # Procesar cada cédula con barra de progreso
-        cedulas_procesadas = []
-        errores_cedulas = []
-        
-        iterador_cedulas = tqdm(
-            cedulas,
-            desc=f"Scrapeando cédulas para {target_period}",
-            unit="cedula",
-            disable=not HAS_TQDM
-        )
-        
-        for cedula in iterador_cedulas:
-            if HAS_TQDM:
-                iterador_cedulas.set_description(f"Scrapeando {cedula} - {target_period}")
+        if not cedulas_pendientes:
+            logger.info("✅ No hay cédulas pendientes según el checkpoint; se omite scraping.")
+        else:
+            iterador_cedulas = tqdm(
+                cedulas_pendientes,
+                desc=f"Scrapeando cédulas para {target_period}",
+                unit="cedula",
+                disable=not HAS_TQDM
+            )
             
-            cedula_limpia = limpiar_cedula(cedula)
-            errores_cedula = []
-            
-            try:
-                logger.debug(f"Scrapeando {cedula_limpia} para período {target_period} (ID: {periodo_id})")
-                actividades_cedula = scraper.scrape_teacher_data(
-                    cedula_limpia,
-                    id_periodo=periodo_id,
-                    max_retries=3,
-                    delay_min=0.5,
-                    delay_max=1.0
+            for idx, cedula in enumerate(iterador_cedulas, 1):
+                if HAS_TQDM:
+                    iterador_cedulas.set_description(f"Scrapeando {cedula} - {target_period}")
+                
+                cedula_limpia = limpiar_cedula(cedula)
+                errores_cedula: List[str] = []
+                
+                logger.info(
+                    f"🔄 Procesando cédula {idx} de {total_pendientes} "
+                    f"({cedula_limpia}) - global {len(cedulas_procesadas) + 1} de {total_cedulas}"
                 )
                 
-                # Asegurar que todas las actividades tengan el período correcto
-                for actividad in actividades_cedula:
-                    if not actividad.get('periodo') or actividad.get('periodo') != target_period:
-                        actividad['periodo'] = target_period
+                try:
+                    logger.debug(f"Scrapeando {cedula_limpia} para período {target_period} (ID: {periodo_id})")
+                    actividades_cedula = scraper.scrape_teacher_data(
+                        cedula_limpia,
+                        id_periodo=periodo_id,
+                        max_retries=3,
+                        delay_min=0.5,
+                        delay_max=1.0
+                    )
+                    
+                    # Asegurar que todas las actividades tengan el período correcto
+                    for actividad in actividades_cedula:
+                        if not actividad.get('periodo') or actividad.get('periodo') != target_period:
+                            actividad['periodo'] = target_period
+                    
+                    if actividades_cedula:
+                        actividades_periodo.extend(actividades_cedula)
+                        estadisticas['total_actividades'] += len(actividades_cedula)
+                        estadisticas['cedulas_procesadas'] += 1
+                        logger.info(f"✓ {cedula_limpia}: {len(actividades_cedula)} actividades extraídas")
+                    else:
+                        # Contar cédulas sin actividades separadamente
+                        if 'cedulas_sin_actividades' not in estadisticas:
+                            estadisticas['cedulas_sin_actividades'] = 0
+                        estadisticas['cedulas_sin_actividades'] += 1
+                        logger.warning(f"⚠️ {cedula_limpia}: No se encontraron actividades para período {target_period}")
+                    
+                    # Marcar como procesada y guardar checkpoint cada 100
+                    cedulas_procesadas.append(cedula_limpia)
+                    if len(cedulas_procesadas) % 100 == 0:
+                        try:
+                            with open(checkpoint_file, "w", encoding="utf-8") as f:
+                                json.dump(
+                                    {
+                                        "cedulas_procesadas": cedulas_procesadas,
+                                        "timestamp": datetime.now().isoformat(),
+                                        "periodo": target_period,
+                                        "total_cedulas": total_cedulas,
+                                    },
+                                    f,
+                                    ensure_ascii=False,
+                                    indent=2,
+                                )
+                            logger.info(f"💾 Checkpoint guardado: {len(cedulas_procesadas)} cédulas procesadas")
+                        except Exception as e:
+                            logger.warning(f"⚠️ No se pudo guardar checkpoint '{checkpoint_file}': {e}")
+                    
+                except Exception as e:
+                    error_msg = f"Error procesando {cedula_limpia}: {e}"
+                    logger.error(error_msg, exc_info=True)
+                    errores_cedula.append(str(e))
+                    estadisticas['errores_por_cedula'][cedula_limpia] = errores_cedula
+                    errores_cedulas.append(cedula_limpia)
+                    estadisticas['cedulas_con_error'] += 1
                 
-                if actividades_cedula:
-                    actividades_periodo.extend(actividades_cedula)
-                    estadisticas['total_actividades'] += len(actividades_cedula)
-                    estadisticas['cedulas_procesadas'] += 1
-                    logger.info(f"✓ {cedula_limpia}: {len(actividades_cedula)} actividades extraídas")
-                else:
-                    # Contar cédulas sin actividades separadamente
-                    if 'cedulas_sin_actividades' not in estadisticas:
-                        estadisticas['cedulas_sin_actividades'] = 0
-                    estadisticas['cedulas_sin_actividades'] += 1
-                    logger.warning(f"⚠️ {cedula_limpia}: No se encontraron actividades para período {target_period}")
-                
-                cedulas_procesadas.append(cedula_limpia)
-                
-            except Exception as e:
-                error_msg = f"Error procesando {cedula_limpia}: {e}"
-                logger.error(error_msg, exc_info=True)
-                errores_cedula.append(str(e))
-                estadisticas['errores_por_cedula'][cedula_limpia] = errores_cedula
-                errores_cedulas.append(cedula_limpia)
-                estadisticas['cedulas_con_error'] += 1
-            
-            # Delay entre cédulas
-            if delay_entre_cedulas > 0:
-                time.sleep(delay_entre_cedulas)
+                # Delay entre cédulas
+                if delay_entre_cedulas > 0:
+                    time.sleep(delay_entre_cedulas)
+        
+        # Guardar checkpoint final
+        try:
+            with open(checkpoint_file, "w", encoding="utf-8") as f:
+                json.dump(
+                    {
+                        "cedulas_procesadas": cedulas_procesadas,
+                        "timestamp": datetime.now().isoformat(),
+                        "periodo": target_period,
+                        "total_cedulas": total_cedulas,
+                    },
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
+            logger.info(f"✅ Checkpoint final guardado: {len(cedulas_procesadas)} cédulas procesadas en total")
+        except Exception as e:
+            logger.warning(f"⚠️ No se pudo guardar checkpoint final '{checkpoint_file}': {e}")
         
         logger.info(f"\n✓ Scraping completado: {estadisticas['cedulas_procesadas']} exitosas, {estadisticas['cedulas_con_error']} con errores")
         
