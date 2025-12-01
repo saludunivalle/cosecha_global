@@ -555,6 +555,186 @@ class UnivalleScraper:
         
         logger.warning(f"⚠️ No se encontró nombre de actividad para tipo_seccion={tipo_seccion}")
         return ""
+
+    def _procesar_tabla_asignaturas(self, tabla) -> List[Dict[str, Any]]:
+        """
+        Procesa tabla de asignaturas (pregrado/posgrado/tesis) usando BeautifulSoup.
+        
+        Lógica basada en web/searchState.gs:
+        1. Identifica tabla por headers (CODIGO, NOMBRE DE ASIGNATURA, HORAS)
+        2. Mapea celdas a objeto usando headers
+        3. Clasifica pregrado/posgrado basándose en el código
+        
+        Returns:
+            list: Lista de actividades clasificadas
+        """
+        actividades: List[Dict[str, Any]] = []
+        
+        filas = tabla.find_all('tr')
+        if len(filas) < 2:
+            return actividades
+        
+        # === PASO 1: Extraer headers ===
+        headers_row = filas[0]
+        headers_celdas = headers_row.find_all(['td', 'th'])
+        headers = [c.get_text(strip=True).upper() for c in headers_celdas]
+        
+        logger.info(f"   📋 Headers detectados: {headers}")
+        
+        # === PASO 2: Validar que sea tabla de asignaturas ===
+        tiene_codigo = any("CODIGO" in h and "ESTUDIANTE" not in h for h in headers)
+        tiene_nombre_asignatura = any("NOMBRE" in h and "ASIGNATURA" in h for h in headers)
+        tiene_horas = any("HORAS" in h for h in headers)
+        
+        if not (tiene_codigo and tiene_nombre_asignatura and tiene_horas):
+            logger.debug("   ⚠️ No es tabla de asignaturas, omitiendo")
+            return actividades
+        
+        # === PASO 3: Procesar cada fila ===
+        for fila_idx, fila in enumerate(filas[1:], start=1):
+            celdas = fila.find_all(['td', 'th'])
+            if not celdas:
+                continue
+            
+            # Extraer textos de celdas
+            valores = [c.get_text(strip=True) for c in celdas]
+            
+            # Mapear headers → valores
+            obj: Dict[str, str] = {}
+            for i, header in enumerate(headers):
+                if i < len(valores):
+                    obj[header] = valores[i]
+            
+            # === PASO 4: Normalizar estructura ===
+            actividad_norm = self._normalizar_estructura_asignatura(obj, headers)
+            
+            # Validar que tenga información mínima
+            if not actividad_norm.get("CODIGO") and not actividad_norm.get("NOMBRE DE ASIGNATURA"):
+                continue
+            
+            # === PASO 5: Clasificar pregrado/posgrado ===
+            es_postgrado = self._es_actividad_postgrado(actividad_norm)
+            tipo_actividad = "posgrado" if es_postgrado else "pregrado"
+            
+            # Construir actividad
+            horas_valor = actividad_norm.get("HORAS SEMESTRE", "0")
+            horas_semestre = self._parsear_horas(horas_valor)
+            
+            actividad = {
+                "tipo_actividad": tipo_actividad,
+                "nombre_actividad": actividad_norm.get("NOMBRE DE ASIGNATURA", ""),
+                "horas_semestre": horas_semestre,
+                "actividad_global": "docencia",
+                "codigo": actividad_norm.get("CODIGO", ""),
+            }
+            
+            actividades.append(actividad)
+            logger.info(
+                f"      ✅ {tipo_actividad.upper()}: "
+                f"{actividad['codigo']} - {actividad['nombre_actividad']} ({actividad['horas_semestre']}h)"
+            )
+        
+        return actividades
+
+    def _normalizar_estructura_asignatura(self, obj: Dict[str, str], headers: List[str]) -> Dict[str, str]:
+        """
+        Normaliza estructura de asignatura mapeando nombres de columnas.
+        
+        Basado en normalizarEstructuraAsignatura de searchState.gs
+        """
+        estructura: Dict[str, str] = {
+            "CODIGO": "",
+            "GRUPO": "",
+            "TIPO": "",
+            "NOMBRE DE ASIGNATURA": "",
+            "CRED": "",
+            "PORC": "",
+            "FREC": "",
+            "INTEN": "",
+            "HORAS SEMESTRE": "",
+        }
+        
+        for header in headers:
+            header_upper = header.upper()
+            valor = obj.get(header, "")
+            
+            if "CODIGO" in header_upper and "ESTUDIANTE" not in header_upper:
+                estructura["CODIGO"] = valor
+            elif "GRUPO" in header_upper:
+                estructura["GRUPO"] = valor
+            elif "TIPO" in header_upper:
+                estructura["TIPO"] = valor
+            elif "NOMBRE" in header_upper and "ASIGNATURA" in header_upper:
+                estructura["NOMBRE DE ASIGNATURA"] = valor
+            elif "CRED" in header_upper:
+                estructura["CRED"] = valor
+            elif "PORC" in header_upper:
+                estructura["PORC"] = valor
+            elif "FREC" in header_upper:
+                estructura["FREC"] = valor
+            elif "INTEN" in header_upper:
+                estructura["INTEN"] = valor
+            elif "HORAS" in header_upper and "SEMESTRE" in header_upper:
+                estructura["HORAS SEMESTRE"] = valor
+        
+        return estructura
+
+    def _es_actividad_postgrado(self, actividad: Dict[str, str]) -> bool:
+        """
+        Determina si una actividad es de postgrado basándose en el código y el nombre.
+        
+        Basado en esActividadPostgrado de searchState.gs
+        """
+        codigo = (actividad.get("CODIGO") or "").upper()
+        nombre = (actividad.get("NOMBRE DE ASIGNATURA") or "").upper()
+        
+        # Keywords de posgrado (complementan KEYWORDS_POSTGRADO globales)
+        keywords_postgrado = [
+            "ESPECIALIZACION",
+            "ESPECIALIZACIÓN",
+            "MAESTRIA",
+            "MAESTRÍA",
+            "DOCTORADO",
+            "POSTGRADO",
+            "POSGRADO",
+            "RESIDENCIA",
+        ]
+        
+        # Verificar keywords en nombre
+        if any(kw in nombre for kw in keywords_postgrado):
+            return True
+        
+        # Verificar patrón de código de posgrado
+        if not codigo:
+            return False
+        
+        # Sufijos típicos de posgrado
+        if codigo.endswith(("E", "M", "D")):
+            return True
+        
+        # Rangos de códigos (heurístico, puede ajustarse)
+        try:
+            if codigo[0].isdigit():
+                primer_digito = int(codigo[0])
+                if primer_digito >= 7:
+                    return True
+        except (IndexError, ValueError):
+            pass
+        
+        return False
+
+    def _parsear_horas(self, valor: str) -> float:
+        """
+        Parsea valor de horas a float de forma robusta.
+        """
+        if not valor:
+            return 0.0
+        try:
+            valor_limpio = str(valor).strip().replace(",", ".")
+            return float(valor_limpio)
+        except (ValueError, TypeError, AttributeError):
+            logger.warning(f"⚠️ No se pudo parsear horas desde valor: {valor!r}")
+            return 0.0
     
     def _extraer_horas_semestre(self, fila_celdas) -> float:
         """
@@ -595,84 +775,6 @@ class UnivalleScraper:
         except Exception as e:
             logger.warning(f"⚠️ Error al extraer HORAS SEMESTRE: {e}")
             return 0.0
-    
-    def _extraer_actividades_docencia(self, tabla) -> List[Dict[str, Any]]:
-        """
-        Extrae actividades de docencia (pregrado, posgrado, tesis) desde una tabla HTML.
-        
-        La tabla tiene una estructura con un título general "ACTIVIDADES DE DOCENCIA"
-        y subsecciones internas marcadas por filas con texto:
-            - "PREGRADO"
-            - "POSGRADO"
-            - "TESIS" (normalmente "TESIS" + "DIRECCION/DIRECCIÓN")
-        
-        Las filas que aparecen DESPUÉS de cada subtítulo pertenecen a esa subsección
-        hasta que aparece otro subtítulo o termina la tabla.
-        
-        Returns:
-            list: Lista de actividades con tipo_actividad correcto:
-                  {
-                      "tipo_actividad": "pregrado" | "posgrado" | "tesis",
-                      "nombre_actividad": str,
-                      "horas_semestre": float,
-                      "actividad_global": "docencia",
-                  }
-        """
-        actividades: List[Dict[str, Any]] = []
-        subseccion_actual: Optional[str] = None  # "pregrado", "posgrado" o "tesis"
-        
-        filas = tabla.find_all('tr')
-        
-        for fila in filas:
-            celdas = fila.find_all(['td', 'th'])
-            if not celdas:
-                continue
-            
-            # Texto completo de la fila para detectar subtítulos
-            texto_completo = ' '.join([c.get_text(strip=True) for c in celdas]).upper()
-            
-            # Detectar cambio de subsección
-            if "PREGRADO" in texto_completo and "POSGRADO" not in texto_completo:
-                subseccion_actual = "pregrado"
-                logger.info("   📚 Detectada subsección: PREGRADO")
-                continue
-            elif "POSGRADO" in texto_completo:
-                subseccion_actual = "posgrado"
-                logger.info("   📚 Detectada subsección: POSGRADO")
-                continue
-            elif "TESIS" in texto_completo and ("DIREC" in texto_completo or "DIR." in texto_completo):
-                subseccion_actual = "tesis"
-                logger.info("   📚 Detectada subsección: TESIS")
-                continue
-            
-            # Si no es un header de subsección, puede ser una fila de actividad
-            if not subseccion_actual:
-                continue
-            
-            # Verificar si la fila parece contener una asignatura (heurística por "ASIGNATURA")
-            tiene_asignatura = any(
-                "ASIGNATURA" in c.get_text(strip=True).upper()
-                for c in celdas
-            )
-            
-            if not tiene_asignatura:
-                continue
-            
-            # Extraer nombre de actividad y horas usando helpers
-            nombre_actividad = self._extraer_nombre_actividad(celdas, "DOCENCIA")
-            horas = self._extraer_horas_semestre(celdas)
-            
-            if nombre_actividad:
-                actividad = {
-                    "tipo_actividad": subseccion_actual,   # pregrado, posgrado o tesis
-                    "nombre_actividad": nombre_actividad,
-                    "horas_semestre": horas,
-                    "actividad_global": "docencia",
-                }
-                actividades.append(actividad)
-                logger.info(f"      ✅ {subseccion_actual}: {nombre_actividad} ({horas}h)")
-        
-        return actividades
     
     def _extraer_escuela_departamento(self, unidad_academica: str) -> tuple[str, str]:
         """
