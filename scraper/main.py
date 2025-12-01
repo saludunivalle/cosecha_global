@@ -395,7 +395,8 @@ def flujo_completo(
     source_column: str = "D",
     target_sheet_url: Optional[str] = None,
     target_period: Optional[str] = None,
-    delay_entre_cedulas: float = 1.0
+    delay_entre_cedulas: float = 1.0,
+    max_cedulas: Optional[int] = None
 ):
     """
     Flujo completo de scraping para un período específico:
@@ -414,6 +415,7 @@ def flujo_completo(
         target_sheet_url: URL de la hoja destino (None = usar hoja por defecto)
         target_period: Período a procesar (None = usar TARGET_PERIOD de variable de entorno)
         delay_entre_cedulas: Delay entre cédulas en segundos (default: 1.0)
+        max_cedulas: Máximo número de cédulas a procesar (None = procesar todas)
     """
     logger = logging.getLogger(__name__)
     inicio_total = time.time()
@@ -480,6 +482,15 @@ def flujo_completo(
             
             estadisticas['cedulas_leidas'] = len(cedulas)
             logger.info(f"✓ {len(cedulas)} cédulas encontradas")
+            
+            # Limitar número de cédulas si se especificó max_cedulas
+            if max_cedulas and max_cedulas > 0:
+                cedulas_originales = len(cedulas)
+                cedulas = cedulas[:max_cedulas]
+                logger.warning(
+                    f"⚠️  LÍMITE APLICADO: Procesando {len(cedulas)} de {cedulas_originales} cédulas "
+                    f"(max_cedulas={max_cedulas})"
+                )
             
             if not cedulas:
                 raise ValueError(f"No se encontraron cédulas en la hoja '{source_worksheet}'")
@@ -735,6 +746,13 @@ def main():
         help='Delay entre cédulas en segundos (default: 1.0)'
     )
     
+    parser.add_argument(
+        '--max-cedulas',
+        type=int,
+        default=None,
+        help='Máximo número de cédulas a procesar (default: None, procesa todas)'
+    )
+    
     # Argumentos para modo individual
     parser.add_argument(
         '--cedula',
@@ -788,7 +806,8 @@ def main():
                 source_column=args.source_column,
                 target_sheet_url=args.target_sheet_url,
                 target_period=args.target_period,
-                delay_entre_cedulas=args.delay_cedulas
+                delay_entre_cedulas=args.delay_cedulas,
+                max_cedulas=args.max_cedulas
             )
             
             if not resultado['exito']:

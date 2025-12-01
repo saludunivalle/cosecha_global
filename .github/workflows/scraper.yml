@@ -1,10 +1,26 @@
 name: Ejecutar Scraper Univalle
 
 on:
-  # Ejecutar automáticamente a las 2:00 AM hora Colombia (UTC-5) todos los días
-  # Colombia UTC-5, entonces 2:00 AM COT = 7:00 AM UTC
+  # Ejecutar automáticamente con cron jobs separados para cada período
   schedule:
+    # 2:00 AM - Período 2026-1
     - cron: '0 7 * * *'
+    # 2:45 AM - Período 2025-2  
+    - cron: '45 7 * * *'
+    # 3:30 AM - Período 2025-1
+    - cron: '30 8 * * *'
+    # 4:15 AM - Período 2024-2
+    - cron: '15 9 * * *'
+    # 5:00 AM - Período 2024-1
+    - cron: '0 10 * * *'
+    # 5:45 AM - Período 2023-2
+    - cron: '45 10 * * *'
+    # 6:30 AM - Período 2023-1
+    - cron: '30 11 * * *'
+    # 7:15 AM - Período 2022-2
+    - cron: '15 12 * * *'
+    # 8:00 AM - Período 2022-1
+    - cron: '0 13 * * *'
   
   # Permite ejecución manual desde GitHub Actions UI
   workflow_dispatch:
@@ -24,12 +40,16 @@ on:
       delay_cedulas:
         description: 'Delay entre cédulas (segundos)'
         required: false
-        default: '0.5'
+        default: '0.1'
+      max_cedulas:
+        description: 'Máximo de cédulas a procesar (dejar vacío para todas)'
+        required: false
+        default: ''
 
 jobs:
   scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 840  # Timeout de 14 horas (9 períodos + 8 delays de 40 min cada uno)
+    timeout-minutes: 40  # Límite de 40 minutos por job
     
     steps:
       - name: Checkout repository
@@ -57,9 +77,6 @@ jobs:
             exit 1
           fi
           
-          # Usar Python para escribir el JSON de forma segura
-          # Esto maneja mejor caracteres especiales y validación
-          # Usamos 'EOF' para evitar expansión de variables en bash
           python3 << 'EOF'
           import json
           import os
@@ -72,25 +89,18 @@ jobs:
               sys.exit(1)
           
           try:
-              # Intentar parsear el JSON para validar que es válido
               credentials_json = json.loads(credentials_str)
-              
-              # Escribir el JSON formateado al archivo
               with open('credentials.json', 'w', encoding='utf-8') as f:
                   json.dump(credentials_json, f, indent=2, ensure_ascii=False)
-              
               print("✓ JSON válido y credentials.json creado exitosamente")
-              
           except json.JSONDecodeError as e:
               print(f"❌ Error: El secret GOOGLE_CREDENTIALS no es un JSON válido: {e}", file=sys.stderr)
-              print(f"   Línea {e.lineno}, columna {e.colno}: {e.msg}", file=sys.stderr)
               sys.exit(1)
           except Exception as e:
               print(f"❌ Error inesperado al crear credentials.json: {e}", file=sys.stderr)
               sys.exit(1)
           EOF
           
-          # Verificar que el archivo se creó correctamente
           if [ ! -f credentials.json ] || [ ! -s credentials.json ]; then
             echo "❌ Error: credentials.json no se pudo crear o está vacío"
             exit 1
@@ -115,21 +125,17 @@ jobs:
       - name: Extract spreadsheet IDs from URLs
         id: extract_ids
         run: |
-          # Función para extraer ID de una URL de Google Sheets
           extract_sheet_id() {
             local url="$1"
-            # Extraer ID de URL: https://docs.google.com/spreadsheets/d/ID/edit
             echo "$url" | sed -n 's/.*\/spreadsheets\/d\/\([a-zA-Z0-9_-]\{44,\}\).*/\1/p'
           }
           
           SOURCE_URL="${{ secrets.SHEET_URL_SOURCE }}"
           TARGET_URL="${{ secrets.SHEET_URL_TARGET }}"
           
-          # Extraer IDs
           SOURCE_ID=$(extract_sheet_id "$SOURCE_URL")
           TARGET_ID=$(extract_sheet_id "$TARGET_URL")
           
-          # Si no se pudo extraer de la URL, intentar usar el valor directamente (por si ya es un ID)
           if [ -z "$SOURCE_ID" ]; then
             SOURCE_ID="$SOURCE_URL"
           fi
@@ -137,7 +143,6 @@ jobs:
             TARGET_ID="$TARGET_URL"
           fi
           
-          # Validar que tenemos IDs
           if [ -z "$SOURCE_ID" ]; then
             echo "❌ Error: No se pudo extraer ID de SHEET_URL_SOURCE"
             exit 1
@@ -151,182 +156,144 @@ jobs:
           echo "  SOURCE_ID: ${SOURCE_ID:0:20}..."
           echo "  TARGET_ID: ${TARGET_ID:0:20}..."
           
-          # Guardar en outputs para usar en el siguiente paso
           echo "source_id=$SOURCE_ID" >> $GITHUB_OUTPUT
           echo "target_id=$TARGET_ID" >> $GITHUB_OUTPUT
       
-      - name: Run scraper for all periods
-        working-directory: ./scraper
-        timeout-minutes: 180  # Timeout de 3 horas por período individual
-        env:
-          # Credenciales de Google Sheets
-          GOOGLE_SHEETS_CREDENTIALS_PATH: credentials.json
+      - name: Determine which period to process
+        id: determine_period
+        run: |
+          # En modo manual, usar el período especificado
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            PERIOD="${{ inputs.target_period }}"
+            echo "📋 Modo manual: procesando período $PERIOD"
+          else
+            # En modo automático (cron), determinar período por horario
+            HOUR=$(date -u +%H)
+            case "$HOUR" in
+              7)  PERIOD="2026-1" ;;
+              8)  PERIOD="2025-2" ;;
+              9)  PERIOD="2024-2" ;;
+              10) PERIOD="2024-1" ;;
+              11) PERIOD="2023-2" ;;
+              12) PERIOD="2022-2" ;;
+              13) PERIOD="2022-1" ;;
+              *)  
+                # Para otros horarios, determinar por minuto también
+                MINUTE=$(date -u +%M)
+                if [ "$HOUR" -eq 7 ] && [ "$MINUTE" -ge 45 ]; then
+                  PERIOD="2025-2"
+                elif [ "$HOUR" -eq 8 ] && [ "$MINUTE" -ge 30 ]; then
+                  PERIOD="2025-1"
+                elif [ "$HOUR" -eq 9 ] && [ "$MINUTE" -ge 15 ]; then
+                  PERIOD="2024-2"
+                elif [ "$HOUR" -eq 10 ] && [ "$MINUTE" -ge 45 ]; then
+                  PERIOD="2023-2"
+                elif [ "$HOUR" -eq 11 ] && [ "$MINUTE" -ge 30 ]; then
+                  PERIOD="2023-1"
+                elif [ "$HOUR" -eq 12 ] && [ "$MINUTE" -ge 15 ]; then
+                  PERIOD="2022-2"
+                else
+                  PERIOD="2026-1"
+                fi
+                ;;
+            esac
+            echo "📋 Modo automático: procesando período $PERIOD (hora UTC: $HOUR)"
+          fi
           
-          # IDs de las hojas (extraídos de las URLs)
+          echo "period=$PERIOD" >> $GITHUB_OUTPUT
+          echo "✓ Período seleccionado: $PERIOD"
+      
+      - name: Run scraper for single period
+        working-directory: ./scraper
+        timeout-minutes: 38  # Dejar 2 minutos para cleanup
+        env:
+          GOOGLE_SHEETS_CREDENTIALS_PATH: credentials.json
           SHEET_SOURCE: ${{ steps.extract_ids.outputs.source_id }}
           SHEET_TARGET: ${{ steps.extract_ids.outputs.target_id }}
-          
-          # También configurar como GOOGLE_SHEETS_SOURCE_ID y GOOGLE_SHEETS_TARGET_ID
           GOOGLE_SHEETS_SOURCE_ID: ${{ steps.extract_ids.outputs.source_id }}
           GOOGLE_SHEETS_TARGET_ID: ${{ steps.extract_ids.outputs.target_id }}
-          
-          # Spreadsheet ID por defecto (legacy, usar SOURCE/TARGET en su lugar)
           GOOGLE_SHEETS_SPREADSHEET_ID: ${{ secrets.GOOGLE_SHEETS_SPREADSHEET_ID || steps.extract_ids.outputs.target_id }}
-          
-          # URLs de las hojas (desde secrets, para uso en comandos)
           SHEET_URL_SOURCE: ${{ secrets.SHEET_URL_SOURCE }}
           SHEET_URL_TARGET: ${{ secrets.SHEET_URL_TARGET }}
-          
-          # Configuración del scraper (opcional, con defaults)
           UNIVALLE_BASE_URL: ${{ vars.UNIVALLE_BASE_URL || 'https://proxse26.univalle.edu.co/asignacion' }}
-          REQUEST_TIMEOUT: ${{ vars.REQUEST_TIMEOUT || '60' }}  # Aumentado a 60 segundos
-          REQUEST_MAX_RETRIES: ${{ vars.REQUEST_MAX_RETRIES || '5' }}  # Más reintentos
-          REQUEST_RETRY_DELAY: ${{ vars.REQUEST_RETRY_DELAY || '3' }}  # Más delay entre reintentos
+          REQUEST_TIMEOUT: ${{ vars.REQUEST_TIMEOUT || '60' }}
+          REQUEST_MAX_RETRIES: ${{ vars.REQUEST_MAX_RETRIES || '5' }}
+          REQUEST_RETRY_DELAY: ${{ vars.REQUEST_RETRY_DELAY || '3' }}
           DEFAULT_PERIODOS_COUNT: ${{ vars.DEFAULT_PERIODOS_COUNT || '8' }}
-          
-          # Configuración de Google Sheets API (timeouts y reintentos)
-          SHEETS_READ_TIMEOUT: ${{ vars.SHEETS_READ_TIMEOUT || '120' }}  # Aumentado a 2 minutos
-          SHEETS_MAX_RETRIES: ${{ vars.SHEETS_MAX_RETRIES || '5' }}  # Más reintentos
-          SHEETS_RETRY_DELAY: ${{ vars.SHEETS_RETRY_DELAY || '10' }}  # Más delay entre reintentos
-          SHEETS_BATCH_SIZE: ${{ vars.SHEETS_BATCH_SIZE || '100' }}  # Lotes más pequeños para evitar timeouts
-          
-          # Logging
+          SHEETS_READ_TIMEOUT: ${{ vars.SHEETS_READ_TIMEOUT || '120' }}
+          SHEETS_MAX_RETRIES: ${{ vars.SHEETS_MAX_RETRIES || '5' }}
+          SHEETS_RETRY_DELAY: ${{ vars.SHEETS_RETRY_DELAY || '10' }}
+          SHEETS_BATCH_SIZE: ${{ vars.SHEETS_BATCH_SIZE || '100' }}
           LOG_LEVEL: INFO
           LOG_FILE: scraper.log
-          
-          # Cookies opcionales (si están configuradas)
           COOKIE_PHPSESSID: ${{ secrets.COOKIE_PHPSESSID || '' }}
           COOKIE_ASIGACAD: ${{ secrets.COOKIE_ASIGACAD || '' }}
         run: |
-          set +e  # No salir en caso de error, continuar con siguientes períodos
+          set +e
           
-          # Definir períodos a procesar (del más reciente al más antiguo)
-          PERIODS=("2026-1" "2025-2" "2025-1" "2024-2" "2024-1" "2023-2" "2023-1" "2022-2" "2022-1")
+          PERIOD="${{ steps.determine_period.outputs.period }}"
           
-          # Para ejecución manual, usar solo el período especificado
-          if [ "${{ github.event_name }}" == "workflow_dispatch" ] && [ -n "${{ inputs.target_period }}" ]; then
-            PERIODS=("${{ inputs.target_period }}")
-            echo "📋 Modo manual: procesando solo período ${{ inputs.target_period }}"
-          else
-            echo "📋 Modo automático: procesando ${#PERIODS[@]} períodos secuencialmente"
-            echo "   Períodos: ${PERIODS[*]}"
-            echo "   Delay entre períodos: 40 minutos"
-          fi
-          
-          # Variables para tracking
-          TOTAL_PERIODS=${#PERIODS[@]}
-          SUCCESSFUL=0
-          FAILED=0
-          FAILED_PERIODS=()
-          
-          # Procesar cada período
-          for i in "${!PERIODS[@]}"; do
-            PERIOD="${PERIODS[$i]}"
-            PERIOD_NUM=$((i + 1))
-            
-            echo ""
-            echo "=========================================================================="
-            echo "🚀 PERÍODO $PERIOD_NUM/$TOTAL_PERIODS: $PERIOD"
-            echo "=========================================================================="
-            echo "   Hora inicio: $(date '+%Y-%m-%d %H:%M:%S %Z')"
-            echo "   Hoja fuente: ${{ inputs.source_worksheet || '2025-2' }}"
-            echo "   Columna: ${{ inputs.source_column || 'D' }}"
-            echo ""
-            
-            # Iniciar keep-alive en background para evitar timeout por inactividad
-            # GitHub Actions detiene el job si no hay output por mucho tiempo
-            (
-              while true; do
-                sleep 300  # 5 minutos
-                echo "   [Keep-Alive] Procesando... ($(date '+%H:%M:%S'))"
-              done
-            ) &
-            KEEPALIVE_PID=$!
-            
-            # Ejecutar scraper para este período
-            PERIOD_START_TIME=$(date +%s)
-            if timeout 7200 python main.py \
-              --modo completo \
-              --source-sheet-url "$SHEET_URL_SOURCE" \
-              --target-sheet-url "$SHEET_URL_TARGET" \
-              --target-period "$PERIOD" \
-              --source-worksheet "${{ inputs.source_worksheet || '2025-2' }}" \
-              --source-column "${{ inputs.source_column || 'D' }}" \
-              --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}; then
-              
-              # Detener keep-alive
-              kill $KEEPALIVE_PID 2>/dev/null || true
-              wait $KEEPALIVE_PID 2>/dev/null || true
-              
-              PERIOD_END_TIME=$(date +%s)
-              PERIOD_DURATION=$((PERIOD_END_TIME - PERIOD_START_TIME))
-              PERIOD_DURATION_MIN=$((PERIOD_DURATION / 60))
-              
-              echo ""
-              echo "✅ Período $PERIOD completado exitosamente en ${PERIOD_DURATION_MIN} minutos"
-              SUCCESSFUL=$((SUCCESSFUL + 1))
-            else
-              # Detener keep-alive
-              kill $KEEPALIVE_PID 2>/dev/null || true
-              wait $KEEPALIVE_PID 2>/dev/null || true
-              
-              echo ""
-              echo "❌ Error al procesar período $PERIOD"
-              FAILED=$((FAILED + 1))
-              FAILED_PERIODS+=("$PERIOD")
-            fi
-            
-            echo "   Hora fin: $(date '+%Y-%m-%d %H:%M:%S %Z')"
-            
-            # Si no es el último período, esperar 40 minutos
-            if [ $PERIOD_NUM -lt $TOTAL_PERIODS ]; then
-              NEXT_PERIOD="${PERIODS[$((i + 1))]}"
-              echo ""
-              echo "⏳ Esperando 40 minutos antes del siguiente período ($NEXT_PERIOD)..."
-              echo "   Próximo inicio estimado: $(date -d '+40 minutes' '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || date -v +40M '+%Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo 'en 40 minutos')"
-              
-              # Sleep en chunks de 1 minuto para poder ver progreso y evitar idle timeout
-              for min in {1..40}; do
-                sleep 60
-                if [ $((min % 5)) -eq 0 ]; then
-                  echo "   ... $((40 - min)) minutos restantes hasta siguiente período"
-                fi
-              done
-              
-              echo "✓ Delay completado, iniciando siguiente período"
-            fi
-          done
-          
-          # Resumen final
+          echo "=========================================================================="
+          echo "🚀 PROCESANDO PERÍODO: $PERIOD"
+          echo "=========================================================================="
+          echo "   Hora inicio: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+          echo "   Hoja fuente: ${{ inputs.source_worksheet || '2025-2' }}"
+          echo "   Columna: ${{ inputs.source_column || 'D' }}"
+          echo "   Delay entre cédulas: ${{ inputs.delay_cedulas || '0.1' }}s"
+          echo "   Máximo cédulas: ${{ inputs.max_cedulas || 'todas' }}"
           echo ""
-          echo "=========================================================================="
-          echo "📊 RESUMEN FINAL"
-          echo "=========================================================================="
-          echo "   Total períodos procesados: $TOTAL_PERIODS"
-          echo "   Exitosos: $SUCCESSFUL"
-          echo "   Fallidos: $FAILED"
           
-          if [ $FAILED -gt 0 ]; then
-            echo ""
-            echo "   Períodos con errores:"
-            for period in "${FAILED_PERIODS[@]}"; do
-              echo "     - $period"
+          # Iniciar keep-alive
+          (
+            while true; do
+              sleep 300
+              echo "   [Keep-Alive] Procesando... ($(date '+%H:%M:%S'))"
             done
+          ) &
+          KEEPALIVE_PID=$!
+          
+          # Ejecutar scraper
+          START_TIME=$(date +%s)
+          
+          # Construir comando con parámetros opcionales
+          CMD="python main.py --modo completo"
+          CMD="$CMD --source-sheet-url \"$SHEET_URL_SOURCE\""
+          CMD="$CMD --target-sheet-url \"$SHEET_URL_TARGET\""
+          CMD="$CMD --target-period \"$PERIOD\""
+          CMD="$CMD --source-worksheet \"${{ inputs.source_worksheet || '2025-2' }}\""
+          CMD="$CMD --source-column \"${{ inputs.source_column || 'D' }}\""
+          CMD="$CMD --delay-cedulas ${{ inputs.delay_cedulas || '0.1' }}"
+          
+          # Agregar max-cedulas si está especificado
+          if [ -n "${{ inputs.max_cedulas }}" ]; then
+            CMD="$CMD --max-cedulas ${{ inputs.max_cedulas }}"
+            echo "⚠️  LÍMITE: Procesando máximo ${{ inputs.max_cedulas }} cédulas"
           fi
           
+          echo "Ejecutando: $CMD"
           echo ""
-          echo "   Hora finalización: $(date '+%Y-%m-%d %H:%M:%S %Z')"
-          echo "=========================================================================="
           
-          # Salir con código de error si hubo fallos (pero después de procesar todos)
-          if [ $FAILED -gt 0 ]; then
+          if eval $CMD; then
+            
+            kill $KEEPALIVE_PID 2>/dev/null || true
+            wait $KEEPALIVE_PID 2>/dev/null || true
+            
+            END_TIME=$(date +%s)
+            DURATION=$(((END_TIME - START_TIME) / 60))
+            
             echo ""
-            echo "⚠️  Algunos períodos fallaron, revisa los logs arriba"
+            echo "✅ Período $PERIOD completado exitosamente en $DURATION minutos"
+            echo "   Hora fin: $(date '+%Y-%m-%d %H:%M:%S %Z')"
+            exit 0
+          else
+            kill $KEEPALIVE_PID 2>/dev/null || true
+            wait $KEEPALIVE_PID 2>/dev/null || true
+            
+            echo ""
+            echo "❌ Error al procesar período $PERIOD"
+            echo "   Hora fin: $(date '+%Y-%m-%d %H:%M:%S %Z')"
             exit 1
           fi
-          
-          echo ""
-          echo "✅ Todos los períodos completados exitosamente"
         continue-on-error: true
         id: scrape_run
       
@@ -334,7 +301,7 @@ jobs:
         if: failure() || steps.scrape_run.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: scraper-logs-${{ github.run_number }}-${{ github.run_attempt }}
+          name: scraper-logs-${{ steps.determine_period.outputs.period }}-${{ github.run_number }}
           path: |
             scraper/scraper.log
           retention-days: 7
@@ -345,30 +312,6 @@ jobs:
         working-directory: ./scraper
         run: |
           if [ -f credentials.json ]; then
-            # Eliminar archivo de credenciales (ya no se necesita)
             rm -f credentials.json
-            echo "✓ credentials.json eliminado por seguridad"
+            echo "✓ credentials.json eliminado"
           fi
-      
-      - name: Check scraper exit status
-        if: steps.scrape_run.outcome == 'failure'
-        run: |
-          echo "❌ El scraper falló con código de salida no cero."
-          echo "📋 Revisa los logs en los artifacts para más detalles."
-          if [ -f scraper/scraper.log ]; then
-            echo ""
-            echo "Últimas 50 líneas del log:"
-            tail -50 scraper/scraper.log
-          fi
-          exit 1
-      
-      - name: Success summary
-        if: success()
-        run: |
-          echo "✅ Scraper ejecutado exitosamente"
-          if [ -f scraper/scraper.log ]; then
-            echo ""
-            echo "Resumen del log:"
-            grep -E "(RESUMEN FINAL|Tiempo total|Cédulas|actividades)" scraper/scraper.log | tail -10 || echo "No se encontró resumen en el log"
-          fi
-

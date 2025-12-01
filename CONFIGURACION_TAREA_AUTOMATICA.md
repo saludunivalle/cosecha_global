@@ -1,14 +1,15 @@
 # Configuración de Tarea Automática - Scraper Univalle
 
-## Fecha: 2025-11-30
+## Fecha: 2025-12-01 (Actualizado)
 
 ## 📋 Resumen
 
 La tarea automática de GitHub Actions ahora está configurada para:
-- ✅ Ejecutarse **todos los días a las 2:00 AM hora Colombia**
-- ✅ Procesar **9 períodos secuencialmente** (del más reciente al más antiguo)
-- ✅ Esperar **40 minutos entre cada período**
-- ✅ Tiempo total estimado: **~10-12 horas**
+- ✅ Ejecutarse **9 veces al día** (un cron job por período)
+- ✅ Cada período se procesa **independientemente** (jobs separados)
+- ✅ Separación de **45 minutos** entre períodos
+- ✅ Cada job tiene **límite de 40 minutos** (bajo el límite de 45 min de GitHub)
+- ✅ Tiempo total estimado: **~6-7 horas** (desde 2:00 AM hasta ~9:00 AM)
 
 ---
 
@@ -23,67 +24,78 @@ schedule:
 
 ---
 
-## 📅 Períodos Procesados (en orden)
+## 📅 Períodos Procesados (Jobs Separados)
 
-| # | Período | Hora Inicio (aprox.) | Hora Fin (aprox.) |
-|---|---------|----------------------|-------------------|
-| 1 | 2026-1  | 2:00 AM             | 2:30-3:00 AM      |
-| 2 | 2025-2  | 2:40 AM             | 3:10-3:40 AM      |
-| 3 | 2025-1  | 3:20 AM             | 3:50-4:20 AM      |
-| 4 | 2024-2  | 4:00 AM             | 4:30-5:00 AM      |
-| 5 | 2024-1  | 4:40 AM             | 5:10-5:40 AM      |
-| 6 | 2023-2  | 5:20 AM             | 5:50-6:20 AM      |
-| 7 | 2023-1  | 6:00 AM             | 6:30-7:00 AM      |
-| 8 | 2022-2  | 6:40 AM             | 7:10-7:40 AM      |
-| 9 | 2022-1  | 7:20 AM             | 7:50-8:20 AM      |
+| # | Período | Hora Inicio (COT) | Hora UTC | Cron | Duración Estimada |
+|---|---------|-------------------|----------|------|-------------------|
+| 1 | 2026-1  | 2:00 AM          | 7:00 AM  | `0 7 * * *`   | 20-35 min |
+| 2 | 2025-2  | 2:45 AM          | 7:45 AM  | `45 7 * * *`  | 20-35 min |
+| 3 | 2025-1  | 3:30 AM          | 8:30 AM  | `30 8 * * *`  | 20-35 min |
+| 4 | 2024-2  | 4:15 AM          | 9:15 AM  | `15 9 * * *`  | 20-35 min |
+| 5 | 2024-1  | 5:00 AM          | 10:00 AM | `0 10 * * *`  | 20-35 min |
+| 6 | 2023-2  | 5:45 AM          | 10:45 AM | `45 10 * * *` | 20-35 min |
+| 7 | 2023-1  | 6:30 AM          | 11:30 AM | `30 11 * * *` | 20-35 min |
+| 8 | 2022-2  | 7:15 AM          | 12:15 PM | `15 12 * * *` | 20-35 min |
+| 9 | 2022-1  | 8:00 AM          | 1:00 PM  | `0 13 * * *`  | 20-35 min |
 
-**Finalización estimada:** 8:00-9:00 AM hora Colombia
+**Separación entre períodos:** 45 minutos  
+**Finalización estimada:** 8:30-9:00 AM hora Colombia
 
 ---
 
 ## 🔄 Flujo de Ejecución
 
+**Estrategia: Jobs Independientes (no secuenciales)**
+
 ```
-2:00 AM → Inicia período 2026-1
-          ↓ (30-60 min de procesamiento)
-          ↓
-          ⏳ Espera 40 minutos
-          ↓
-2:40 AM → Inicia período 2025-2
-          ↓ (30-60 min de procesamiento)
-          ↓
-          ⏳ Espera 40 minutos
-          ↓
-3:20 AM → Inicia período 2025-1
-          ...
-          (continúa hasta 2022-1)
+2:00 AM → Job 1: Período 2026-1 ───► (20-35 min) ───► ✅
+2:45 AM → Job 2: Período 2025-2 ───► (20-35 min) ───► ✅
+3:30 AM → Job 3: Período 2025-1 ───► (20-35 min) ───► ✅
+4:15 AM → Job 4: Período 2024-2 ───► (20-35 min) ───► ✅
+5:00 AM → Job 5: Período 2024-1 ───► (20-35 min) ───► ✅
+5:45 AM → Job 6: Período 2023-2 ───► (20-35 min) ───► ✅
+6:30 AM → Job 7: Período 2023-1 ───► (20-35 min) ───► ✅
+7:15 AM → Job 8: Período 2022-2 ───► (20-35 min) ───► ✅
+8:00 AM → Job 9: Período 2022-1 ───► (20-35 min) ───► ✅
+
+Cada job es INDEPENDIENTE:
+- Si un job falla, los demás NO se ven afectados
+- Cada job aparece como un "run" separado en GitHub Actions
+- Los logs se guardan por separado
 ```
 
 ---
 
 ## 🎯 Características Principales
 
-### 1. Ejecución Secuencial (NO Paralela)
-- Los períodos se procesan uno después del otro
-- Si un período falla, continúa con el siguiente
-- Al final muestra resumen de éxitos y fallos
+### 1. Jobs Independientes (NO Secuenciales)
+- Cada período es un job separado con su propio cron
+- Si un job falla, NO afecta a los demás
+- Cada job bajo el límite de 45 minutos de GitHub Actions
+- ✅ **SOLUCIÓN al problema de timeout de 45 minutos**
 
-### 2. Delay Inteligente
-- 40 minutos de espera entre períodos
-- Muestra progreso cada 10 minutos
-- Indica hora estimada del próximo período
+### 2. Separación Automática de 45 Minutos
+- Jobs programados con cron separados
+- No usa delays artificiales (sleep)
+- Cada período se ejecuta a su hora programada
+- GitHub Actions maneja la programación
 
 ### 3. Manejo de Errores Robusto
-- Si un período falla, NO detiene toda la ejecución
-- Registra qué períodos fallaron
-- Continúa procesando los períodos restantes
-- Al final muestra resumen completo
+- Si un período falla, los demás siguen ejecutándose
+- Logs separados por período (artifacts)
+- Fácil identificar qué período falló
+- Re-ejecutar solo el período problemático
 
-### 4. Logs Detallados
-- Hora de inicio y fin de cada período
-- Número de cédulas procesadas
-- Errores encontrados
-- Resumen final con estadísticas
+### 4. Logs Separados por Período
+- Cada período genera su propio artifact
+- Fácil búsqueda de errores específicos
+- Retención de 7 días
+- Nombre formato: `scraper-logs-PERIODO-RUN`
+
+### 5. Ejecución Manual Flexible
+- Procesar cualquier período individual
+- Sin depender del horario automático
+- Ideal para re-procesar o testing
 
 ---
 
@@ -112,14 +124,21 @@ En modo manual:
 ## 📊 Timeout y Límites
 
 ```yaml
-timeout-minutes: 840  # 14 horas máximo
+jobs:
+  scrape:
+    timeout-minutes: 40  # Límite de 40 minutos por job
+    steps:
+      - name: Run scraper
+        timeout-minutes: 38  # 38 min para scraper, 2 min para cleanup
 ```
 
-**Cálculo del timeout:**
-- 9 períodos × 60 minutos (promedio) = 540 minutos
-- 8 delays × 40 minutos = 320 minutos
-- **Total:** 860 minutos (~14.3 horas)
-- **Configurado:** 840 minutos (14 horas) con margen
+**Por qué 40 minutos:**
+- GitHub Actions tiene un límite de 45 minutos por job (en ciertos planes)
+- Configuramos 40 minutos para tener margen de seguridad
+- Duración típica por período: 20-35 minutos
+- Margen de seguridad: 5-20 minutos
+
+**Ventaja:** Cada período completa en <40 min, cumpliendo con el límite de 45 min de GitHub
 
 ---
 
@@ -156,51 +175,47 @@ REQUEST_RETRY_DELAY: 2 segundos
    - Tiempo restante hasta siguiente período
    - Errores si los hay
 
-### Ejemplo de output
+### Ejemplo de output (un job individual)
 
 ```
 ==========================================================================
-🚀 PERÍODO 1/9: 2026-1
+🚀 PROCESANDO PERÍODO: 2026-1
 ==========================================================================
-   Hora inicio: 2025-11-30 07:00:15 UTC
+   Hora inicio: 2025-12-01 07:00:15 UTC
    Hoja fuente: 2025-2
    Columna: D
 
 ✓ 38872843: 17 actividades extraídas
+   [Keep-Alive] Procesando... (07:05:15)
 ✓ 12345678: 12 actividades extraídas
+   [Keep-Alive] Procesando... (07:10:15)
 ...
 
-✅ Período 2026-1 completado exitosamente
-   Hora fin: 2025-11-30 07:35:42 UTC
-
-⏳ Esperando 40 minutos antes del siguiente período (2025-2)...
-   Próximo inicio estimado: 2025-11-30 08:15:42 UTC
-   ... 30 minutos restantes
-   ... 20 minutos restantes
-   ... 10 minutos restantes
-✓ Delay completado, iniciando siguiente período
+✅ Período 2026-1 completado exitosamente en 28 minutos
+   Hora fin: 2025-12-01 07:28:42 UTC
 ```
+
+**Nota:** Ya NO hay mensajes de "Esperando 40 minutos" porque cada período es un job separado.
 
 ---
 
-## 📈 Resumen Final
+## 📈 Visualización de Resultados
 
-Al completar todos los períodos, verás un resumen como:
+En la página de **Actions**, verás múltiples runs, uno por cada período:
 
 ```
-==========================================================================
-📊 RESUMEN FINAL
-==========================================================================
-   Total períodos procesados: 9
-   Exitosos: 8
-   Fallidos: 1
-
-   Períodos con errores:
-     - 2023-2
-
-   Hora finalización: 2025-11-30 14:25:33 UTC
-==========================================================================
+Ejecutar Scraper Univalle #123 (2026-1) ✅ - 28 min
+Ejecutar Scraper Univalle #124 (2025-2) ✅ - 31 min
+Ejecutar Scraper Univalle #125 (2025-1) ❌ - 15 min (falló)
+Ejecutar Scraper Univalle #126 (2024-2) ✅ - 29 min
+Ejecutar Scraper Univalle #127 (2024-1) ✅ - 27 min
+Ejecutar Scraper Univalle #128 (2023-2) ✅ - 32 min
+Ejecutar Scraper Univalle #129 (2023-1) ✅ - 26 min
+Ejecutar Scraper Univalle #130 (2022-2) ✅ - 30 min
+Ejecutar Scraper Univalle #131 (2022-1) ✅ - 28 min
 ```
+
+**Ventaja:** Fácil identificar qué período específico falló sin revisar un log enorme.
 
 ---
 
