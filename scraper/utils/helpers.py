@@ -78,14 +78,14 @@ def limpiar_departamento(departamento: str) -> str:
     Limpia el nombre del departamento removiendo prefijos comunes.
     
     Ejemplos:
-        "DEPARTAMENTO MEDICINA INTERNA" -> "MEDICINA INTERNA"
-        "DEPARTAMENTO DE CIRUGIA" -> "CIRUGIA"
+        "DEPARTAMENTO MEDICINA INTERNA" -> "Medicina Interna"
+        "DEPARTAMENTO DE CIRUGIA" -> "Cirugia General"
     
     Args:
         departamento: Nombre del departamento a limpiar
         
     Returns:
-        Nombre del departamento limpio (sin prefijo)
+        Nombre del departamento limpio y normalizado
     """
     if not departamento:
         return ''
@@ -101,6 +101,7 @@ def limpiar_departamento(departamento: str) -> str:
         r'^DEPTO\s+DE\s+',
         r'^DEPTO\.\s*',
         r'^DEPTO\s+',
+        r'^DE\s+',  # Remover "DE " al inicio
     ]
     
     for prefijo in prefijos:
@@ -108,8 +109,38 @@ def limpiar_departamento(departamento: str) -> str:
     
     # Limpiar espacios múltiples
     dept = ' '.join(dept.split())
+    dept = dept.strip()
     
-    return dept.strip()
+    # Mapa de normalización de departamentos (igual que const.gs)
+    NAMES_DEPARTAMENT = {
+        'ANESTESIA': 'Anestesiología',
+        'ATENCION PREHOSPITALARIA': 'Atención Prehospitalaria',
+        'CIRUGIA': 'Cirugia General',
+        'OBSTETRICIA Y GINECOLOGIA': 'Ginecología y Obstetricia',
+        'MEDICINA FAMILIAR': 'Medicina Familiar',
+        'MEDICINA FISICA Y REHABLITACION': 'Medicina Física y Rehabilitación',
+        'MEDICINA INTERNA': 'Medicina Interna',
+        'PATOLOGIA': 'Patología',
+        'PEDIATRIA': 'Pediatría',
+        'PSIQUIATRIA': 'Psiquiatría',
+        'ESCUELA': 'Escuela',
+        'MICROBIOLOGIA': 'Microbiología',
+        'CIENCIAS FISIOLOGICAS': 'Ciencias Fisiológicas',
+        'MORFOLOGIA': 'Morfología',
+        'NO APLICA': 'No aplica',
+        'CIRUGIA PEDIATRICA': 'Cirugía Pediátrica',
+        'NEUROCIRUGIA': 'Neurocirugía',
+        'OFTALMOLOGIA': 'Oftalmología',
+        'ORTOPEDIA': 'Ortopedia',
+        'OTORRINO': 'Otorrino',
+        'UROLOGIA': 'Urología',
+        'CIRUGIA PLASTICA': 'Cirugía plástica',
+        'DERMATOLOGIA': 'Dermatología',
+        'RADIODIAGNOSTICO': 'Radiodiagnóstico',
+    }
+    
+    # Buscar en el mapa de normalización
+    return NAMES_DEPARTAMENT.get(dept, dept.title() if dept else 'Escuela')
 
 
 def limpiar_escuela(escuela: str) -> str:
@@ -117,15 +148,16 @@ def limpiar_escuela(escuela: str) -> str:
     Limpia el nombre de la escuela removiendo prefijos comunes.
     
     Ejemplos:
-        "ESCUELA DE MEDICINA" -> "MEDICINA"
-        "ESCUELA CIENCIAS BASICAS" -> "CIENCIAS BASICAS"
-        "FACULTAD DE SALUD" -> "SALUD"
+        "ESCUELA DE MEDICINA" -> "Medicina"
+        "DE MEDICINA" -> "Medicina"
+        "ESCUELA CIENCIAS BASICAS" -> "Ciencias Básicas"
+        "FACULTAD DE SALUD" -> "Salud Pública"
     
     Args:
         escuela: Nombre de la escuela a limpiar
         
     Returns:
-        Nombre de la escuela limpio (sin prefijo)
+        Nombre de la escuela limpio y normalizado
     """
     if not escuela:
         return ''
@@ -133,7 +165,7 @@ def limpiar_escuela(escuela: str) -> str:
     # Normalizar primero
     esc = escuela.strip().upper()
     
-    # Patrones a remover del inicio
+    # Patrones a remover del inicio (orden importa: más específicos primero)
     prefijos = [
         r'^ESCUELA\s+DE\s+',
         r'^ESCUELA\s+',
@@ -141,6 +173,7 @@ def limpiar_escuela(escuela: str) -> str:
         r'^FACULTAD\s+',
         r'^INSTITUTO\s+DE\s+',
         r'^INSTITUTO\s+',
+        r'^DE\s+',  # Remover "DE " al inicio
     ]
     
     for prefijo in prefijos:
@@ -148,8 +181,22 @@ def limpiar_escuela(escuela: str) -> str:
     
     # Limpiar espacios múltiples
     esc = ' '.join(esc.split())
+    esc = esc.strip()
     
-    return esc.strip()
+    # Mapa de normalización de escuelas (igual que const.gs)
+    NAMES_SCHOOL = {
+        'BACTERIOLOGIA': 'Bacteriología y Lab. Clínico',
+        'BACTERIOLOGIA Y LABORAT CLINICO': 'Bacteriología y Lab. Clínico',
+        'CIENCIAS BASICAS': 'Ciencias Básicas',
+        'ODONTOLOGIA': 'Odontología',
+        'ENFERMERIA': 'Enfermería',
+        'MEDICINA': 'Medicina',
+        'SALUD PUBLICA': 'Salud Pública',
+        'REHABILITACION HUMANA': 'Rehabilitación Humana',
+    }
+    
+    # Buscar en el mapa de normalización
+    return NAMES_SCHOOL.get(esc, esc.title() if esc else '')
 
 
 def formatear_nombre_completo(

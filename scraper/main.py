@@ -346,7 +346,7 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 17 columnas según headGeneralSheet de const.gs (orden correcto para Google Sheets)
+    # 16 columnas (sin columna Cargo, termina con Nivel)
     headers = [
         'Cedula',              # 1
         'Nombre Profesor',     # 2
@@ -364,14 +364,13 @@ def escribir_actividades_en_hojas(
         'Vinculación',         # 14
         'Dedicación',          # 15
         'Nivel',               # 16
-        'Cargo',               # 17
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
         try:
             logger.debug(f"Escribiendo {len(actividades)} actividades para período {periodo_label}")
             
-            # Convertir diccionarios a listas de valores (17 columnas según headGeneralSheet)
+            # Convertir diccionarios a listas de valores (16 columnas)
             filas = []
             contador = 0
             for actividad in actividades:
@@ -409,14 +408,13 @@ def escribir_actividades_en_hojas(
                     actividad.get('vinculacion', ''),        # 14. Vinculación
                     actividad.get('dedicacion', ''),         # 15. Dedicación
                     actividad.get('nivel', ''),              # 16. Nivel
-                    actividad.get('cargo', ''),              # 17. Cargo
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
-                if len(row_data) != 17:
+                if len(row_data) != 16:
                     logger.error(
                         f"❌ Row inválido para {actividad.get('cedula', '')}: "
-                        f"tiene {len(row_data)} columnas, esperadas 17"
+                        f"tiene {len(row_data)} columnas, esperadas 16"
                     )
                     logger.error(f"   Row: {row_data}")
                     continue

@@ -1324,62 +1324,37 @@ class UnivalleScraper:
                     elif 'INTEN' in header_upper and not actividad.inten:
                         actividad.inten = valor
             
-            # Validaciones y conversión de horas a número
-            horas_valida = False
+            # Conversión de horas a número (más permisivo, igual que .gs)
             if actividad.horas_semestre and actividad.horas_semestre.strip():
                 try:
                     # Limpiar horas: remover caracteres no numéricos excepto punto
                     horas_limpia = re.sub(r'[^\d.]', '', actividad.horas_semestre)
                     if horas_limpia:
                         horas_numero = float(horas_limpia)
-                        if horas_numero > 0:
-                            actividad.horas_semestre = str(horas_numero)
-                            horas_valida = True
-                            logger.debug(f"  ✓ Horas válidas: {horas_numero}")
-                        else:
-                            logger.warning(f"⚠️ Horas debe ser mayor a 0, encontrado: {horas_numero}")
-                            actividad.horas_semestre = ''
+                        actividad.horas_semestre = str(horas_numero)
+                        logger.debug(f"  ✓ Horas: {horas_numero}")
                 except (ValueError, TypeError):
-                    logger.warning(f"⚠️ No se pudo convertir horas a número: '{actividad.horas_semestre}'")
-                    actividad.horas_semestre = ''
+                    logger.debug(f"⚠️ No se pudo convertir horas: '{actividad.horas_semestre}'")
+                    actividad.horas_semestre = '0'
             else:
-                logger.warning(f"⚠️ No se encontraron horas para actividad: codigo='{actividad.codigo}', nombre='{actividad.nombre_asignatura}'")
+                actividad.horas_semestre = '0'
             
-            # Validaciones de nombre de actividad
-            nombre_valido = False
+            # Limpiar nombre de actividad si existe (sin validaciones estrictas)
             if actividad.nombre_asignatura:
                 nombre_limpio = actividad.nombre_asignatura.strip()
-                # Validar que NO sea un número (las horas no deben estar aquí)
-                if re.match(r'^\d+\.?\d*$', nombre_limpio):
-                    logger.error(f"❌ ERROR: Nombre de actividad es un número '{nombre_limpio}' - las columnas están invertidas")
-                    nombre_valido = False
-                # Validar que no termine en porcentaje
-                elif nombre_limpio and not nombre_limpio.endswith('%'):
-                    # Validar que tenga longitud razonable
-                    if len(nombre_limpio) > 3:  # Mínimo 4 caracteres
-                        nombre_valido = True
-                        logger.debug(f"  ✓ Nombre válido: '{nombre_limpio}'")
-                    else:
-                        logger.warning(f"⚠️ Nombre de actividad muy corto: '{nombre_limpio}'")
-                else:
-                    logger.warning(f"⚠️ Nombre de actividad termina en porcentaje (incorrecto): '{nombre_limpio}'")
-            else:
-                logger.warning(f"⚠️ Nombre de actividad vacío para codigo='{actividad.codigo}'")
+                # Solo limpiar porcentajes al final
+                if nombre_limpio.endswith('%'):
+                    nombre_limpio = re.sub(r'\s*\d+%$', '', nombre_limpio).strip()
+                actividad.nombre_asignatura = nombre_limpio
             
-            # Solo agregar actividad si tiene datos válidos
-            if (actividad.codigo or actividad.nombre_asignatura) and nombre_valido:
-                # Validación final antes de agregar
-                if horas_valida:
-                    if self._es_postgrado(actividad):
-                        postgrado.append(actividad)
-                        logger.debug(f"  ✓ Actividad postgrado agregada: '{actividad.nombre_asignatura}' - {actividad.horas_semestre} horas")
-                    else:
-                        pregrado.append(actividad)
-                        logger.debug(f"  ✓ Actividad pregrado agregada: '{actividad.nombre_asignatura}' - {actividad.horas_semestre} horas")
+            # Agregar actividad si tiene código O nombre (más permisivo, igual que .gs)
+            if actividad.codigo or actividad.nombre_asignatura:
+                if self._es_postgrado(actividad):
+                    postgrado.append(actividad)
+                    logger.debug(f"  ✓ Postgrado: '{actividad.nombre_asignatura}' - {actividad.horas_semestre}h")
                 else:
-                    logger.warning(f"⚠️ Actividad omitida por horas inválidas: codigo='{actividad.codigo}', nombre='{actividad.nombre_asignatura}'")
-            else:
-                logger.warning(f"⚠️ Actividad omitida por datos inválidos: codigo='{actividad.codigo}', nombre='{actividad.nombre_asignatura}'")
+                    pregrado.append(actividad)
+                    logger.debug(f"  ✓ Pregrado: '{actividad.nombre_asignatura}' - {actividad.horas_semestre}h")
         
         return pregrado, postgrado
     
@@ -2189,27 +2164,35 @@ class UnivalleScraper:
         
         logger.debug(f"Procesando actividades para período {periodo_label}")
         
+        # Helper para construir detalle de docencia (igual que .gs)
+        def construir_detalle_docencia(act):
+            detalles = []
+            if act.grupo:
+                detalles.append(f"Grupo: {act.grupo}")
+            if act.tipo:
+                detalles.append(f"Tipo: {act.tipo}")
+            if hasattr(act, 'cred') and act.cred:
+                detalles.append(f"Créditos: {act.cred}")
+            if hasattr(act, 'frec') and act.frec:
+                detalles.append(f"Frecuencia: {act.frec}")
+            if hasattr(act, 'inten') and act.inten:
+                detalles.append(f"Intensidad: {act.inten}")
+            return ' | '.join(detalles)
+        
         # Procesar actividades de pregrado
         for actividad in datos_docente.actividades_pregrado:
-            # Combinar código y nombre: "626001C - HISTORIA IDEAS EN CIENCIAS DE LA SALUD"
-            nombre_completo_actividad = actividad.nombre_asignatura
-            if actividad.codigo and actividad.nombre_asignatura:
-                nombre_completo_actividad = f"{actividad.codigo} - {actividad.nombre_asignatura}"
-            elif actividad.codigo:
-                nombre_completo_actividad = actividad.codigo
-            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad='Pregrado',
-                categoria=categoria_info,
-                nombre_actividad=nombre_completo_actividad,
+                tipo_actividad='Docencia',                           # Tipo general: Docencia
+                categoria='Pregrado',                                # Categoría: Pregrado
+                nombre_actividad=actividad.nombre_asignatura or '',  # Solo el nombre, sin código
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
-                detalle_actividad='DOCENCIA',  # Tipo de actividad
-                actividad=f"{actividad.tipo} - Grupo {actividad.grupo}" if actividad.grupo else actividad.tipo,
+                detalle_actividad=construir_detalle_docencia(actividad),  # Detalle completo
+                actividad='Pregrado',                                # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -2222,25 +2205,18 @@ class UnivalleScraper:
         
         # Procesar actividades de postgrado
         for actividad in datos_docente.actividades_postgrado:
-            # Combinar código y nombre: "626001C - HISTORIA IDEAS EN CIENCIAS DE LA SALUD"
-            nombre_completo_actividad = actividad.nombre_asignatura
-            if actividad.codigo and actividad.nombre_asignatura:
-                nombre_completo_actividad = f"{actividad.codigo} - {actividad.nombre_asignatura}"
-            elif actividad.codigo:
-                nombre_completo_actividad = actividad.codigo
-            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad='Postgrado',
-                categoria=categoria_info,
-                nombre_actividad=nombre_completo_actividad,
+                tipo_actividad='Docencia',                           # Tipo general: Docencia
+                categoria='Postgrado',                               # Categoría: Postgrado
+                nombre_actividad=actividad.nombre_asignatura or '',  # Solo el nombre, sin código
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
-                detalle_actividad='DOCENCIA',  # Tipo de actividad
-                actividad=f"{actividad.tipo} - Grupo {actividad.grupo}" if actividad.grupo else actividad.tipo,
+                detalle_actividad=construir_detalle_docencia(actividad),  # Detalle completo
+                actividad='Postgrado',                               # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -2251,6 +2227,13 @@ class UnivalleScraper:
                 porcentaje=actividad.porc
             ))
         
+        # Helper para determinar categoría de investigación (igual que .gs)
+        def determinar_categoria_investigacion(act):
+            nombre = str(act.nombre_proyecto or '').upper()
+            if 'ANTEPROYECTO' in nombre:
+                return 'Anteproyecto'
+            return 'Proyecto'
+        
         # Procesar actividades de investigación
         for actividad in datos_docente.actividades_investigacion:
             actividades.append(self._construir_actividad_dict(
@@ -2258,13 +2241,13 @@ class UnivalleScraper:
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad='Investigación',
-                categoria=categoria_info,
-                nombre_actividad=actividad.nombre_proyecto,
+                tipo_actividad='Investigación',                      # Tipo general
+                categoria=determinar_categoria_investigacion(actividad),  # Proyecto o Anteproyecto
+                nombre_actividad=actividad.nombre_proyecto or '',
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
-                detalle_actividad='INVESTIGACION',  # Tipo de actividad
-                actividad=actividad.aprobado_por or 'Proyecto de Investigación',
+                detalle_actividad='',
+                actividad='Investigación',                           # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -2280,6 +2263,8 @@ class UnivalleScraper:
             horas_tesis = tesis.get('HORAS SEMESTRE', '') or tesis.get('Horas Semestre', '')
             # Obtener código estudiante
             codigo_est = tesis.get('CODIGO ESTUDIANTE', '') or tesis.get('Codigo Estudiante', '') or tesis.get('ESTUDIANTE', '')
+            # Obtener plan
+            cod_plan = tesis.get('COD PLAN', '') or tesis.get('PLAN', '')
             
             logger.debug(f"Tesis - título: '{titulo_tesis}', horas: '{horas_tesis}'")
             
@@ -2288,17 +2273,18 @@ class UnivalleScraper:
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad='Dirección de Tesis',
-                categoria=categoria_info,
+                tipo_actividad='Docencia',                           # Tipo general: Docencia
+                categoria='Tesis',                                   # Categoría: Tesis
                 nombre_actividad=titulo_tesis,
                 numero_horas=horas_tesis,
                 periodo=periodo_label,
-                detalle_actividad='DOCENCIA',  # Tipo de actividad según requerimiento
-                actividad=f"Estudiante: {codigo_est}" if codigo_est else 'Tesis',
+                detalle_actividad=f"Plan: {cod_plan}" if cod_plan else '',
+                actividad='Tesis',                                   # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
-                cargo=cargo
+                cargo=cargo,
+                codigo=codigo_est
             ))
         
         # Procesar actividades de extensión
@@ -2308,13 +2294,13 @@ class UnivalleScraper:
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad=self._determinar_tipo_actividad("ACTIVIDADES DE EXTENSION"),
-                categoria=categoria_info,
-                nombre_actividad=actividad.get('NOMBRE', ''),
+                tipo_actividad='Extensión',                          # Tipo general
+                categoria=actividad.get('TIPO', '') or actividad.get('Tipo', ''),
+                nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad='EXTENSION',  # Tipo de actividad
-                actividad=self._determinar_actividad_global(self._determinar_tipo_actividad("ACTIVIDADES DE EXTENSION")),
+                detalle_actividad='',
+                actividad='Extensión',                               # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -2323,18 +2309,19 @@ class UnivalleScraper:
         
         # Procesar actividades intelectuales
         for actividad in datos_docente.actividades_intelectuales:
+            aprobado_por = actividad.get('APROBADO POR', '') or actividad.get('Aprobado Por', '')
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad=self._determinar_tipo_actividad("ACTIVIDADES INTELECTUALES O ARTISTICAS"),
-                categoria=categoria_info,
-                nombre_actividad=actividad.get('TITULO', '') or actividad.get('Titulo', ''),
+                tipo_actividad='Intelectuales',                      # Tipo general
+                categoria=actividad.get('TIPO', '') or actividad.get('Tipo', ''),
+                nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad='INTELECTUALES O ARTISTICAS',  # Tipo de actividad
-                actividad=self._determinar_actividad_global(self._determinar_tipo_actividad("ACTIVIDADES INTELECTUALES O ARTISTICAS")),
+                detalle_actividad=f"Aprobado por: {aprobado_por}" if aprobado_por else '',
+                actividad='Intelectuales',                           # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -2348,13 +2335,13 @@ class UnivalleScraper:
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad=self._determinar_tipo_actividad("ACTIVIDADES ADMINISTRATIVAS"),
-                categoria=categoria_info,
-                nombre_actividad=actividad.get('CARGO', ''),
+                tipo_actividad='Administrativas',                    # Tipo general
+                categoria=actividad.get('CARGO', '') or actividad.get('Cargo', ''),
+                nombre_actividad=actividad.get('DESCRIPCION DEL CARGO', '') or actividad.get('DESCRIPCION', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad='ADMINISTRATIVAS',  # Tipo de actividad
-                actividad=self._determinar_actividad_global(self._determinar_tipo_actividad("ACTIVIDADES ADMINISTRATIVAS")),
+                detalle_actividad='',
+                actividad='Administrativas',                         # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -2368,13 +2355,13 @@ class UnivalleScraper:
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad=self._determinar_tipo_actividad("ACTIVIDADES COMPLEMENTARIAS"),
-                categoria=categoria_info,
-                nombre_actividad=actividad.get('PARTICIPACION EN', '') or actividad.get('NOMBRE', ''),
+                tipo_actividad='Complementarias',                    # Tipo general
+                categoria=actividad.get('PARTICIPACION EN', '') or '',
+                nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad='COMPLEMENTARIAS',  # Tipo de actividad
-                actividad=self._determinar_actividad_global(self._determinar_tipo_actividad("ACTIVIDADES COMPLEMENTARIAS")),
+                detalle_actividad='',
+                actividad='Complementarias',                         # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -2388,13 +2375,13 @@ class UnivalleScraper:
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
-                tipo_actividad=self._determinar_tipo_actividad("DOCENTE EN COMISION"),
-                categoria=actividad.get('TIPO DE COMISION', ''),
-                nombre_actividad=actividad.get('DESCRIPCION', ''),
+                tipo_actividad='Comisión',                           # Tipo general
+                categoria=actividad.get('TIPO DE COMISION', '') or actividad.get('Tipo de Comision', ''),
+                nombre_actividad=actividad.get('DESCRIPCION', '') or actividad.get('Descripcion', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
-                detalle_actividad='DOCENTE EN COMISION',  # Tipo de actividad
-                actividad=self._determinar_actividad_global(self._determinar_tipo_actividad("DOCENTE EN COMISION")),
+                detalle_actividad='',
+                actividad='Comisión',                                # Actividad general
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
