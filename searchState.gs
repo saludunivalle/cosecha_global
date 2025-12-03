@@ -901,78 +901,59 @@ function buildAuthHeaders(cookies) {
 
 /**
  * Determina si una actividad de docencia es de postgrado basándose en sus propiedades.
- * Mejora la clasificación para evitar mezclas entre pregrado y postgrado
  * @param {object} actividad - El objeto de la actividad con claves como "CODIGO", "NOMBRE DE ASIGNATURA", etc.
  * @returns {boolean} - True si es postgrado, false si no.
  */
 function esActividadPostgrado(actividad) {
   if (!actividad) return false;
 
-  var codigo = String(actividad.CODIGO || "").trim();
-  var nombre = String(actividad["NOMBRE DE ASIGNATURA"] || "").toUpperCase().trim();
-  var tipo = String(actividad.TIPO || "").toUpperCase().trim();
-  var grupo = String(actividad.GRUPO || "").toUpperCase().trim();
-
-  // Si no hay información suficiente, clasificar como pregrado por defecto
-  if (!codigo && !nombre && !tipo && !grupo) {
-    Logger.log("🎓 PREGRADO por falta de información");
-    return false;
-  }
+  const codigo = String(actividad.CODIGO || "");
+  const nombre = String(actividad["NOMBRE DE ASIGNATURA"] || "").toUpperCase();
+  const tipo = String(actividad.TIPO || "").toUpperCase();
 
   // Criterio 1: Palabras clave explícitas de postgrado (más confiable)
-  var keywordsPostgrado = [
-    "MAESTRIA", "MAESTRÍA", "MAGISTER", "MASTER", "MAESTR",
+  const keywordsPostgrado = [
+    "MAESTRIA", "MAESTRÍA", "MAGISTER", "MASTER",
     "DOCTORADO", "DOCTORAL", "PHD", "DOCTOR",
-    "ESPECIALIZA", "ESPECIALIZACION", "ESPECIALIZACIÓN",
-    "POSTGRADO", "POSGRADO", "POST-GRADO", "POST GRADO",
-    "POSTGRADUADO", "POSGRADUADO"
+    "ESPECIALIZA", "ESPECIALIZACION", "ESPECIALIZACION",
+    "POSTGRADO", "POSGRADO", "POST-GRADO", "POST GRADO"
   ];
 
-  for (var i = 0; i < keywordsPostgrado.length; i++) {
-    var keyword = keywordsPostgrado[i];
-    if (nombre.indexOf(keyword) !== -1 || tipo.indexOf(keyword) !== -1 || grupo.indexOf(keyword) !== -1) {
-      Logger.log("🎓 POSTGRADO por keyword \"" + keyword + "\": " + codigo + " - " + nombre);
+  for (const keyword of keywordsPostgrado) {
+    if (nombre.includes(keyword) || tipo.includes(keyword)) {
+      Logger.log(`🎓 POSTGRADO por keyword "${keyword}": ${codigo} - ${nombre}`);
       return true;
     }
   }
 
   // Criterio 2: Palabras clave explícitas de pregrado (para evitar falsos positivos)
-  var keywordsPregrado = [
+  const keywordsPregrado = [
     "LICENCIATURA", "INGENIERIA", "INGENERÍA", "BACHILLERATO",
-    "TECNOLOGIA", "TECNOLOGÍA", "PROFESIONAL", "CARRERA",
-    "PREGRADO", "PRIMER CICLO", "UNDERGRADUATE"
+    "TECNOLOGIA", "TECNOLOGÍA", "PROFESIONAL", "CARRERA"
   ];
 
-  for (var j = 0; j < keywordsPregrado.length; j++) {
-    var keywordPreg = keywordsPregrado[j];
-    if (nombre.indexOf(keywordPreg) !== -1 || tipo.indexOf(keywordPreg) !== -1 || grupo.indexOf(keywordPreg) !== -1) {
-      Logger.log("🎓 PREGRADO por keyword \"" + keywordPreg + "\": " + codigo + " - " + nombre);
+  for (const keyword of keywordsPregrado) {
+    if (nombre.includes(keyword) || tipo.includes(keyword)) {
+      Logger.log(`🎓 PREGRADO por keyword "${keyword}": ${codigo} - ${nombre}`);
       return false;
     }
   }
   
-  // Criterio 3: Códigos de asignatura (validar que sea un código numérico válido)
+  // Criterio 3: Códigos de asignatura (menos confiable, aplicar con cuidado)
   // Códigos que empiezan con 7, 8, 9 son típicamente postgrado
-  if (codigo && /^[7-9]\d{3,}$/.test(codigo)) {
-    Logger.log("🎓 POSTGRADO por código alto: " + codigo + " - " + nombre);
+  if (codigo.match(/^[7-9]\d{3,}/)) {
+    Logger.log(`🎓 POSTGRADO por código alto: ${codigo} - ${nombre}`);
     return true;
   }
 
-  // Códigos de pregrado típicos (1-6)
-  if (codigo && /^[1-6]\d{3,}$/.test(codigo)) {
-    Logger.log("🎓 PREGRADO por código bajo: " + codigo + " - " + nombre);
+  // Criterio 4: Códigos de pregrado típicos (1-6)
+  if (codigo.match(/^[1-6]\d{3,}/)) {
+    Logger.log(`🎓 PREGRADO por código bajo: ${codigo} - ${nombre}`);
     return false;
   }
 
-  // Criterio 4: Si el código empieza con letras que indican postgrado
-  if (codigo && /^(M|D|E|P)[A-Z0-9]/.test(codigo.toUpperCase())) {
-    // M = Maestría, D = Doctorado, E = Especialización, P = Postgrado
-    Logger.log("🎓 POSTGRADO por código con letra: " + codigo + " - " + nombre);
-    return true;
-  }
-
-  // Por defecto, clasificar como pregrado (más común)
-  Logger.log("🎓 PREGRADO por defecto: " + codigo + " - " + nombre);
+  // Por defecto, si no hay criterios claros, clasificar como pregrado
+  Logger.log(`🎓 PREGRADO por defecto: ${codigo} - ${nombre}`);
   return false;
 }
 
@@ -1034,13 +1015,7 @@ function procesarHTML(html, idPeriod) {
       else if (headerUpper.includes("PORC")) estructuraNormalizada["PORC"] = valor;
       else if (headerUpper.includes("FREC")) estructuraNormalizada["FREC"] = valor;
       else if (headerUpper.includes("INTEN")) estructuraNormalizada["INTEN"] = valor;
-      // Mejorar extracción de HORAS SEMESTRE - ser más flexible
-      else if ((headerUpper.includes("HORAS") && headerUpper.includes("SEMESTRE")) ||
-               headerUpper === "HORAS SEMESTRE" ||
-               (headerUpper.includes("HORAS") && !headerUpper.includes("TOTAL")) ||
-               headerUpper === "HORAS") {
-        estructuraNormalizada["HORAS SEMESTRE"] = valor;
-      }
+      else if (headerUpper.includes("HORAS") && headerUpper.includes("SEMESTRE")) estructuraNormalizada["HORAS SEMESTRE"] = valor;
     });
     return estructuraNormalizada;
   }
@@ -1131,68 +1106,16 @@ function procesarHTML(html, idPeriod) {
     Logger.log("=== PROCESANDO TABLA ===");
     Logger.log("Headers originales: " + headers.join(" | "));
 
-    // Tabla de información personal - Mejorar detección con múltiples variaciones
-    var tieneCedula = headersNorm.some(function(h) {
-      return h.includes("CEDULA") || 
-             h.includes("DOCUMENTO") || 
-             h === "DOCENTES" ||
-             h.includes("IDENTIFICACION");
-    });
-    var tieneApellido = headersNorm.some(function(h) {
-      return h.includes("APELLIDO") || 
-             h.includes("APELLIDOS") ||
-             h.includes("NOMBRE");
-    });
-    
-    if (tieneCedula && tieneApellido) {
+    if (headersNorm.some(h => h.includes("CEDULA")) && headersNorm.some(h => h.includes("APELLIDO"))) {
       if (rowMatches.length >= 2) {
         var values = extractCells(rowMatches[1]);
-        headers.forEach(function(header, i) {
-          var valor = values[i] || "";
-          // Normalizar nombres de campos comunes
-          var headerNorm = header.toUpperCase().trim();
-          if (headerNorm.includes("CEDULA") || headerNorm === "DOCENTES" || headerNorm.includes("DOCUMENTO")) {
-            informacionPersonal["CEDULA"] = valor;
-          }
-          if (headerNorm.includes("1 APELLIDO") || headerNorm === "APELLIDO1" || headerNorm === "PRIMER APELLIDO") {
-            informacionPersonal["1 APELLIDO"] = valor;
-          }
-          if (headerNorm.includes("2 APELLIDO") || headerNorm === "APELLIDO2" || headerNorm === "SEGUNDO APELLIDO") {
-            informacionPersonal["2 APELLIDO"] = valor;
-          }
-          if (headerNorm === "NOMBRE" || headerNorm.includes("NOMBRES")) {
-            informacionPersonal["NOMBRE"] = valor;
-          }
-          // Mapear VINCULACION
-          if (headerNorm.includes("VINCULACION") || headerNorm.includes("VINCULACIÓN")) {
-            informacionPersonal["VINCULACION"] = valor;
-          }
-          // Mapear CATEGORIA
-          if (headerNorm.includes("CATEGORIA") || headerNorm.includes("CATEGORÍA") || headerNorm === "CARGO") {
-            informacionPersonal["CATEGORIA"] = valor;
-          }
-          // Mapear DEDICACION
-          if (headerNorm.includes("DEDICACION") || headerNorm.includes("DEDICACIÓN")) {
-            informacionPersonal["DEDICACION"] = valor;
-          }
-          // Mapear NIVEL ALCANZADO
-          if (headerNorm.includes("NIVEL ALCANZADO") || headerNorm.includes("NIVEL")) {
-            informacionPersonal["NIVEL ALCANZADO"] = valor;
-            informacionPersonal["NIVEL"] = valor; // También guardar como NIVEL para compatibilidad
-          }
-          // Guardar también el header original para compatibilidad
-          informacionPersonal[header] = valor;
-        });
+        headers.forEach((header, i) => { informacionPersonal[header] = values[i] || ""; });
       }
       return;
     }
 
     // Lógica para clasificar asignaturas individualmente
-    // Mejorar detección: debe tener CODIGO y NOMBRE DE ASIGNATURA, pero NO debe ser tesis
-    var esTablaAsignaturas = headersNorm.some(function(h) { return h === "CODIGO" || h.includes("CODIGO"); }) && 
-                            headersNorm.some(function(h) { return h.includes("NOMBRE") && h.includes("ASIGNATURA"); }) &&
-                            !headersNorm.some(function(h) { return h.includes("ESTUDIANTE") && h.includes("CODIGO"); });
-    
+    var esTablaAsignaturas = headersNorm.includes("CODIGO") && headersNorm.includes("NOMBRE DE ASIGNATURA");
     if (esTablaAsignaturas) {
       Logger.log("🎓 Detectada tabla de asignaturas. Procesando fila por fila...");
       Logger.log("🎓 Headers de asignaturas: " + headers.join(" | "));
@@ -1203,47 +1126,22 @@ function procesarHTML(html, idPeriod) {
       for (var ri = 1; ri < rowMatches.length; ri++) {
         var row = rowMatches[ri];
         var cells = extractCells(row);
-        
-        // Saltar filas vacías o que sean solo separadores
-        if (cells.every(function(c) { return c === "" || c.trim() === ""; })) continue;
-        
-        // Validar que la fila tenga al menos código o nombre
-        var tieneCodigo = cells.some(function(c, idx) {
-          var header = headers[idx] || "";
-          return header.toUpperCase().includes("CODIGO") && c && c.trim() !== "";
-        });
-        var tieneNombre = cells.some(function(c, idx) {
-          var header = headers[idx] || "";
-          return header.toUpperCase().includes("NOMBRE") && c && c.trim() !== "";
-        });
-        
-        if (!tieneCodigo && !tieneNombre) continue;
+        if (cells.every(c => c === "")) continue;
 
         var obj = {};
-        for (var ci = 0; ci < headers.length && ci < cells.length; ci++) {
-          obj[headers[ci]] = cells[ci] || "";
-        }
-        
+        headers.forEach((header, ci) => { obj[header] = cells[ci] || ""; });
         var estructuraNormalizada = normalizarEstructuraAsignatura(obj, headers);
-        
-        // Validar que la actividad tenga información mínima antes de clasificar
-        if (!estructuraNormalizada.CODIGO && !estructuraNormalizada["NOMBRE DE ASIGNATURA"]) {
-          Logger.log("⚠️ Actividad sin código ni nombre, omitiendo");
-          continue;
-        }
         
         if (esActividadPostgrado(estructuraNormalizada)) {
           actividadesDocencia.postgrado.push(estructuraNormalizada);
           contadorPostgradoTabla++;
-          Logger.log("✅ POSTGRADO: " + estructuraNormalizada.CODIGO + " - " + estructuraNormalizada["NOMBRE DE ASIGNATURA"]);
         } else {
           actividadesDocencia.pregrado.push(estructuraNormalizada);
           contadorPregradoTabla++;
-          Logger.log("✅ PREGRADO: " + estructuraNormalizada.CODIGO + " - " + estructuraNormalizada["NOMBRE DE ASIGNATURA"]);
         }
       }
       
-      Logger.log("🎓 Tabla de asignaturas procesada: " + contadorPregradoTabla + " pregrado, " + contadorPostgradoTabla + " postgrado");
+      Logger.log(`🎓 Tabla de asignaturas procesada: ${contadorPregradoTabla} pregrado, ${contadorPostgradoTabla} postgrado`);
       contadorDocencia++;
       return;
     }
@@ -1277,18 +1175,10 @@ function procesarHTML(html, idPeriod) {
         if (cells.every(c => c === "")) continue;
 
         var obj = {};
-        for (var ci = 0; ci < headers.length && ci < cells.length; ci++) {
-          obj[headers[ci]] = cells[ci] || "";
-        }
+        headers.forEach((header, ci) => { obj[header] = cells[ci] || ""; });
         var estructuraNormalizada = normalizarEstructuraTesis(obj, headers);
-        
-        // Validar que la tesis tenga información mínima
-        if (estructuraNormalizada["CODIGO ESTUDIANTE"] || estructuraNormalizada["TITULO DE LA TESIS"]) {
-          actividadesDocencia.direccionTesis.push(estructuraNormalizada);
-          Logger.log("🎯 Agregada tesis: " + JSON.stringify(estructuraNormalizada));
-        } else {
-          Logger.log("⚠️ Tesis sin información mínima, omitiendo");
-        }
+        actividadesDocencia.direccionTesis.push(estructuraNormalizada);
+        Logger.log("🎯 Agregada tesis: " + JSON.stringify(estructuraNormalizada));
       }
       return;
     }

@@ -2216,7 +2216,8 @@ class UnivalleScraper:
                 cargo=cargo,
                 codigo=actividad.codigo,
                 grupo=actividad.grupo,
-                tipo=actividad.tipo
+                tipo=actividad.tipo,
+                porcentaje=actividad.porc
             ))
         
         # Procesar actividades de postgrado
@@ -2246,7 +2247,8 @@ class UnivalleScraper:
                 cargo=cargo,
                 codigo=actividad.codigo,
                 grupo=actividad.grupo,
-                tipo=actividad.tipo
+                tipo=actividad.tipo,
+                porcentaje=actividad.porc
             ))
         
         # Procesar actividades de investigación

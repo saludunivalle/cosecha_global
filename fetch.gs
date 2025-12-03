@@ -330,5 +330,3 @@ function updateDataTeachers(sheetNameDoc,sheetNameUpdate) {
   }
   return response
 }
-
-

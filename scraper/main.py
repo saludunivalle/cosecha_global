@@ -346,28 +346,32 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 13 columnas según especificación (orden correcto para Google Sheets)
+    # 17 columnas según headGeneralSheet de const.gs (orden correcto para Google Sheets)
     headers = [
-        'Cedula',
-        'Nombre Profesor',
-        'Escuela',
-        'Departamento',
-        'Tipo de Actividad',
-        'Nombre de actividad',
-        'Número de horas',
-        'Período',
-        'Actividad',
-        'Vinculación',
-        'Categoría',
-        'Dedicación',
-        'Nivel',
+        'Cedula',              # 1
+        'Nombre Profesor',     # 2
+        'Escuela',             # 3
+        'Departamento',        # 4
+        'Tipo de Actividad',   # 5
+        'Categoria',           # 6
+        'Nombre de actividad', # 7
+        'Numero de horas',     # 8
+        'id',                  # 9
+        'Período',             # 10
+        'Porcentaje Horas',    # 11
+        'Detalle actividad',   # 12
+        'Actividad',           # 13
+        'Vinculación',         # 14
+        'Dedicación',          # 15
+        'Nivel',               # 16
+        'Cargo',               # 17
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
         try:
             logger.debug(f"Escribiendo {len(actividades)} actividades para período {periodo_label}")
             
-            # Convertir diccionarios a listas de valores (13 columnas)
+            # Convertir diccionarios a listas de valores (17 columnas según headGeneralSheet)
             filas = []
             contador = 0
             for actividad in actividades:
@@ -382,37 +386,47 @@ def escribir_actividades_en_hojas(
                     logger.warning(f"⚠️ Valor de horas_semestre no convertible a float: {horas_semestre!r}. Usando 0.0")
                     horas_semestre = 0.0
                 
+                # Extraer porcentaje de horas si existe
+                porcentaje_horas = actividad.get('porcentaje', '') or actividad.get('porc', '') or ''
+                
+                # Extraer ID/código de la actividad
+                id_actividad = actividad.get('codigo', '') or actividad.get('id', '') or ''
+                
                 row_data = [
                     actividad.get('cedula', ''),             # 1. Cedula
                     actividad.get('nombre_profesor', ''),    # 2. Nombre Profesor
                     actividad.get('escuela', ''),            # 3. Escuela
                     actividad.get('departamento', ''),       # 4. Departamento
                     actividad.get('tipo_actividad', ''),     # 5. Tipo de Actividad
-                    actividad.get('nombre_actividad', ''),   # 6. Nombre de actividad
-                    horas_semestre,                          # 7. Número de horas (float, nunca vacío)
-                    actividad.get('periodo', ''),            # 8. Período
-                    actividad.get('actividad', ''),          # 9. Actividad global
-                    actividad.get('vinculacion', ''),        # 10. Vinculación
-                    actividad.get('categoria', ''),          # 11. Categoría
-                    actividad.get('dedicacion', ''),         # 12. Dedicación
-                    actividad.get('nivel', ''),              # 13. Nivel
+                    actividad.get('categoria', ''),          # 6. Categoria
+                    actividad.get('nombre_actividad', ''),   # 7. Nombre de actividad
+                    horas_semestre,                          # 8. Numero de horas (float, nunca vacío)
+                    id_actividad,                            # 9. id (código de la actividad)
+                    actividad.get('periodo', ''),            # 10. Período
+                    porcentaje_horas,                        # 11. Porcentaje Horas
+                    actividad.get('detalle_actividad', ''),  # 12. Detalle actividad
+                    actividad.get('actividad', ''),          # 13. Actividad
+                    actividad.get('vinculacion', ''),        # 14. Vinculación
+                    actividad.get('dedicacion', ''),         # 15. Dedicación
+                    actividad.get('nivel', ''),              # 16. Nivel
+                    actividad.get('cargo', ''),              # 17. Cargo
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
-                if len(row_data) != 13:
+                if len(row_data) != 17:
                     logger.error(
                         f"❌ Row inválido para {actividad.get('cedula', '')}: "
-                        f"tiene {len(row_data)} columnas, esperadas 13"
+                        f"tiene {len(row_data)} columnas, esperadas 17"
                     )
                     logger.error(f"   Row: {row_data}")
                     continue
                 
-                # Validar que columna 7 (índice 6) sea número
-                if not isinstance(row_data[6], (int, float)):
+                # Validar que columna 8 (índice 7) sea número
+                if not isinstance(row_data[7], (int, float)):
                     logger.warning(
-                        f"⚠️ Horas no es número para {actividad.get('cedula', '')}: {row_data[6]!r}"
+                        f"⚠️ Horas no es número para {actividad.get('cedula', '')}: {row_data[7]!r}"
                     )
-                    row_data[6] = 0.0
+                    row_data[7] = 0.0
                 
                 # Log de ejemplo cada 100 registros
                 if contador % 100 == 0:
