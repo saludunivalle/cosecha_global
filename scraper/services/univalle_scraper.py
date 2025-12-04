@@ -1880,8 +1880,8 @@ class UnivalleScraper:
         Returns:
             Lista de diccionarios, cada uno representa una actividad del profesor.
             Campos: cedula, nombre_profesor, escuela, departamento, tipo_actividad,
-            categoria, nombre_actividad, numero_horas, periodo, detalle_actividad,
-            actividad, vinculacion, dedicacion, nivel, cargo, departamento
+            categoria, nombre_actividad, numero_horas, periodo, actividad, 
+            vinculacion, dedicacion, nivel
         
         Raises:
             ValueError: Si la cédula es inválida o no se encontraron datos
@@ -2273,7 +2273,6 @@ class UnivalleScraper:
                 categoria='Pregrado',
                 nombre_actividad=actividad.nombre_asignatura or '',
                 numero_horas=actividad.horas_semestre,
-                detalle_actividad=f"Código: {actividad.codigo}" if actividad.codigo else '',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
@@ -2295,7 +2294,6 @@ class UnivalleScraper:
                 categoria='Postgrado',
                 nombre_actividad=actividad.nombre_asignatura or '',
                 numero_horas=actividad.horas_semestre,
-                detalle_actividad=f"Código: {actividad.codigo}" if actividad.codigo else '',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
@@ -2324,7 +2322,6 @@ class UnivalleScraper:
                 categoria=determinar_categoria_investigacion(actividad),
                 nombre_actividad=actividad.nombre_proyecto or '',
                 numero_horas=actividad.horas_semestre,
-                detalle_actividad=f"Código: {actividad.codigo}" if actividad.codigo else '',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE INVESTIGACION',
                 vinculacion=vinculacion,
@@ -2350,7 +2347,6 @@ class UnivalleScraper:
                 categoria='Tesis',
                 nombre_actividad=titulo_tesis,
                 numero_horas=horas_tesis,
-                detalle_actividad=f"Código estudiante: {codigo_est}" if codigo_est else '',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
@@ -2369,7 +2365,6 @@ class UnivalleScraper:
                 categoria=actividad.get('TIPO', '') or actividad.get('Tipo', ''),
                 nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
-                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE EXTENSION',
                 vinculacion=vinculacion,
@@ -2388,7 +2383,6 @@ class UnivalleScraper:
                 categoria=actividad.get('TIPO', '') or actividad.get('Tipo', ''),
                 nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
-                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES INTELECTUALES O ARTISTICAS',
                 vinculacion=vinculacion,
@@ -2407,7 +2401,6 @@ class UnivalleScraper:
                 categoria=actividad.get('CARGO', '') or actividad.get('Cargo', ''),
                 nombre_actividad=actividad.get('DESCRIPCION DEL CARGO', '') or actividad.get('DESCRIPCION', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
-                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES ADMINISTRATIVAS',
                 vinculacion=vinculacion,
@@ -2426,7 +2419,6 @@ class UnivalleScraper:
                 categoria=actividad.get('PARTICIPACION EN', '') or '',
                 nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
-                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES COMPLEMENTARIAS',
                 vinculacion=vinculacion,
@@ -2445,7 +2437,6 @@ class UnivalleScraper:
                 categoria=actividad.get('TIPO DE COMISION', '') or actividad.get('Tipo de Comision', ''),
                 nombre_actividad=actividad.get('DESCRIPCION', '') or actividad.get('Descripcion', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
-                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='DOCENTE EN COMISION',
                 vinculacion=vinculacion,
@@ -2466,7 +2457,6 @@ class UnivalleScraper:
         categoria: str,
         nombre_actividad: str,
         numero_horas: str,
-        detalle_actividad: str,
         periodo: str,
         actividad: str,
         vinculacion: str,
@@ -2475,11 +2465,11 @@ class UnivalleScraper:
         **kwargs
     ) -> Dict[str, Any]:
         """
-        Construye un diccionario con los 14 campos requeridos para una actividad.
+        Construye un diccionario con los 13 campos requeridos para una actividad.
         
         Orden: cedula, nombre profesor, escuela, departamento, tipo actividad, 
-               categoría, nombre actividad, número de horas, detalle actividad,
-               periodo, actividad, vinculación, dedicación, nivel
+               categoría, nombre actividad, número de horas, periodo, actividad, 
+               vinculación, dedicación, nivel
         
         Returns:
             Diccionario con todos los campos de la actividad
@@ -2498,7 +2488,7 @@ class UnivalleScraper:
         escuela_limpia = limpiar_escuela(escuela)
         departamento_limpio = limpiar_departamento(departamento)
         
-        # Construir diccionario (14 campos en orden correcto)
+        # Construir diccionario (13 campos en orden correcto)
         actividad_dict = {
             'cedula': str(cedula),
             'nombre_profesor': str(nombre_profesor),
@@ -2508,7 +2498,6 @@ class UnivalleScraper:
             'categoria': str(categoria),
             'nombre_actividad': nombre_actividad_limpio,
             'numero_horas': horas_numero,
-            'detalle_actividad': str(detalle_actividad) if detalle_actividad else '',
             'periodo': str(periodo),
             'actividad': str(actividad),
             'vinculacion': str(vinculacion),

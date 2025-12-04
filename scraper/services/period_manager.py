@@ -278,8 +278,7 @@ class PeriodManager:
         Headers utilizados:
             cedula, nombre profesor, escuela, departamento, tipo actividad,
             categoría, nombre actividad, número de horas, periodo,
-            detalle actividad, actividad, vinculación, dedicación, nivel,
-            cargo, departamento
+            actividad, vinculación, dedicación, nivel
         
         Raises:
             ValueError: Si el período no está especificado o tiene formato inválido
@@ -301,7 +300,7 @@ class PeriodManager:
         
         logger.info(f"Preparando hoja para período: {period}")
         
-        # Headers especificados (15 columnas)
+        # Headers especificados (13 columnas)
         headers = [
             'cedula',
             'nombre profesor',
@@ -312,12 +311,10 @@ class PeriodManager:
             'nombre actividad',
             'número de horas',
             'periodo',
-            'detalle actividad',
             'actividad',
             'vinculación',
             'dedicación',
-            'nivel',
-            'cargo'
+            'nivel'
         ]
         
         # Obtener o crear conexión a la hoja de cálculo
