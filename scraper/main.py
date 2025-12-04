@@ -346,7 +346,7 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 16 columnas (sin columna Cargo, termina con Nivel)
+    # 14 columnas (sin Detalle actividad, Nivel, Cargo)
     headers = [
         'Cedula',              # 1
         'Nombre Profesor',     # 2
@@ -359,18 +359,16 @@ def escribir_actividades_en_hojas(
         'id',                  # 9
         'Período',             # 10
         'Porcentaje Horas',    # 11
-        'Detalle actividad',   # 12
-        'Actividad',           # 13
-        'Vinculación',         # 14
-        'Dedicación',          # 15
-        'Nivel',               # 16
+        'Actividad',           # 12
+        'Vinculación',         # 13
+        'Dedicación',          # 14
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
         try:
             logger.debug(f"Escribiendo {len(actividades)} actividades para período {periodo_label}")
             
-            # Convertir diccionarios a listas de valores (16 columnas)
+            # Convertir diccionarios a listas de valores (14 columnas)
             filas = []
             contador = 0
             for actividad in actividades:
@@ -403,18 +401,16 @@ def escribir_actividades_en_hojas(
                     id_actividad,                            # 9. id (código de la actividad)
                     actividad.get('periodo', ''),            # 10. Período
                     porcentaje_horas,                        # 11. Porcentaje Horas
-                    actividad.get('detalle_actividad', ''),  # 12. Detalle actividad
-                    actividad.get('actividad', ''),          # 13. Actividad
-                    actividad.get('vinculacion', ''),        # 14. Vinculación
-                    actividad.get('dedicacion', ''),         # 15. Dedicación
-                    actividad.get('nivel', ''),              # 16. Nivel
+                    actividad.get('actividad', ''),          # 12. Actividad
+                    actividad.get('vinculacion', ''),        # 13. Vinculación
+                    actividad.get('dedicacion', ''),         # 14. Dedicación
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
-                if len(row_data) != 16:
+                if len(row_data) != 14:
                     logger.error(
                         f"❌ Row inválido para {actividad.get('cedula', '')}: "
-                        f"tiene {len(row_data)} columnas, esperadas 16"
+                        f"tiene {len(row_data)} columnas, esperadas 14"
                     )
                     logger.error(f"   Row: {row_data}")
                     continue
