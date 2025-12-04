@@ -248,11 +248,62 @@ class UnivalleScraper:
         return html
     
     def extraer_tablas(self, html: str) -> List[str]:
-        """Extrae todas las tablas del HTML."""
-        pattern = r'<table[^>]*>[\s\S]*?</table>'
-        matches = re.findall(pattern, html, re.IGNORECASE)
-        logger.debug(f"Encontradas {len(matches)} tablas en el HTML")
-        return matches
+        """
+        Extrae todas las tablas del HTML, incluyendo tablas anidadas.
+        Usa un enfoque que maneja correctamente tablas anidadas.
+        """
+        tablas = []
+        
+        # Buscar todas las posiciones de <table y </table>
+        pos = 0
+        while True:
+            # Encontrar el inicio de la siguiente tabla
+            start_match = re.search(r'<table[^>]*>', html[pos:], re.IGNORECASE)
+            if not start_match:
+                break
+            
+            start_pos = pos + start_match.start()
+            
+            # Contar niveles de anidamiento para encontrar el </table> correspondiente
+            nivel = 1
+            search_pos = start_pos + start_match.end() - pos
+            
+            while nivel > 0 and search_pos < len(html):
+                # Buscar siguiente <table> o </table>
+                next_open = re.search(r'<table[^>]*>', html[search_pos:], re.IGNORECASE)
+                next_close = re.search(r'</table>', html[search_pos:], re.IGNORECASE)
+                
+                if not next_close:
+                    break
+                
+                if next_open and next_open.start() < next_close.start():
+                    # Encontramos otra tabla anidada
+                    nivel += 1
+                    search_pos += next_open.end()
+                else:
+                    # Encontramos cierre de tabla
+                    nivel -= 1
+                    if nivel == 0:
+                        end_pos = search_pos + next_close.end()
+                        tabla_html = html[start_pos:end_pos]
+                        tablas.append(tabla_html)
+                    search_pos += next_close.end()
+            
+            pos = start_pos + 1
+        
+        # Extraer también tablas internas (anidadas) que pueden tener datos útiles
+        tablas_internas = []
+        for tabla in tablas:
+            # Buscar tablas con name="T..." (tablas de datos específicas)
+            internal_pattern = r'<table[^>]*name=["\']?T[^"\'>\s]*["\']?[^>]*>[\s\S]*?</table>'
+            internal_matches = re.findall(internal_pattern, tabla, re.IGNORECASE)
+            tablas_internas.extend(internal_matches)
+        
+        # Combinar tablas, priorizando las internas con name="T..."
+        todas_tablas = tablas_internas if tablas_internas else tablas
+        
+        logger.debug(f"Encontradas {len(tablas)} tablas principales, {len(tablas_internas)} tablas internas (name='T...')")
+        return todas_tablas if todas_tablas else tablas
     
     def extraer_filas(self, tabla_html: str) -> List[str]:
         """Extrae todas las filas de una tabla."""
@@ -282,22 +333,23 @@ class UnivalleScraper:
         return normalizar_texto(texto)
     
     def extraer_celdas(self, fila_html: str) -> List[str]:
-        """Extrae celdas de una fila, manejando colspan."""
-        pattern = r'<t[dh][^>]*>([\s\S]*?)</t[dh]>'
+        """Extrae celdas de una fila, manejando colspan correctamente."""
+        # Patrón que captura la etiqueta completa (incluyendo atributos) y el contenido
+        pattern = r'<(t[dh])([^>]*)>([\s\S]*?)</\1>'
         matches = re.findall(pattern, fila_html, re.IGNORECASE)
         
         celdas = []
-        for match in matches:
-            # Buscar colspan
-            colspan_match = re.search(r'colspan=["\']?(\d+)["\']?', match, re.IGNORECASE)
+        for tag, attrs, contenido in matches:
+            # Buscar colspan en los ATRIBUTOS de la etiqueta (no en el contenido)
+            colspan_match = re.search(r'colspan=["\']?(\d+)["\']?', attrs, re.IGNORECASE)
             colspan = int(colspan_match.group(1)) if colspan_match else 1
             
-            # Extraer texto
-            texto = self.extraer_texto_de_celda(match)
+            # Extraer texto del contenido
+            texto = self.extraer_texto_de_celda(contenido)
             
-            # Replicar según colspan
-            for _ in range(colspan):
-                celdas.append(texto)
+            # Agregar celda (SIN replicar por colspan para mantener alineación con headers)
+            # Los headers y datos usan el mismo patrón de colspan
+            celdas.append(texto)
         
         return celdas
     
@@ -470,8 +522,12 @@ class UnivalleScraper:
         - Buscar columna "NOMBRE DE ASIGNATURA" o "NOMBRE ASIGNATURA" (case-insensitive)
         - Si no encuentra, buscar columna que contenga "NOMBRE" pero no sea numérica
         - Extraer el texto completo de esa celda
+        - Si falla, buscar el texto más largo que no sea código ni número
         """
         indice_nombre = -1
+        
+        logger.debug(f"  _extraer_nombre: headers={headers}")
+        logger.debug(f"  _extraer_nombre: celdas={celdas}")
         
         # 1. Buscar exactamente "NOMBRE DE ASIGNATURA" o "NOMBRE ASIGNATURA"
         for j, header in enumerate(headers):
@@ -494,11 +550,35 @@ class UnivalleScraper:
         if indice_nombre >= 0 and indice_nombre < len(celdas):
             valor = (celdas[indice_nombre] or "").strip()
             # Verificar que no sea un número (para evitar confundir con horas)
-            if valor and not re.match(r'^\d+\.?\d*$', valor):
-                logger.debug(f"  → Nombre extraído: '{valor}'")
+            if valor and not re.match(r'^\d+\.?\d*%?$', valor):
+                logger.debug(f"  → Nombre extraído por índice {indice_nombre}: '{valor}'")
                 return valor
             else:
-                logger.debug(f"  → Valor descartado (es número): '{valor}'")
+                logger.debug(f"  → Valor descartado (es número o porcentaje): '{valor}'")
+        
+        # 4. Fallback: buscar el texto más largo que parezca un nombre de asignatura
+        # (no es código, no es número, no es porcentaje)
+        mejor_candidato = ""
+        for j, celda in enumerate(celdas):
+            valor = (celda or "").strip()
+            if not valor:
+                continue
+            # Saltar números, porcentajes, códigos cortos
+            if re.match(r'^\d+\.?\d*%?$', valor):
+                continue
+            if len(valor) <= 3:  # Códigos muy cortos como "MG", "1", etc.
+                continue
+            # Saltar si parece un código (mayúsculas + números, corto)
+            if re.match(r'^[A-Z0-9]{5,8}C?$', valor):
+                continue
+            # Quedarse con el más largo (probablemente el nombre)
+            if len(valor) > len(mejor_candidato):
+                mejor_candidato = valor
+                logger.debug(f"  → Candidato encontrado en celda {j}: '{valor}'")
+        
+        if mejor_candidato:
+            logger.debug(f"  → Nombre extraído (fallback texto largo): '{mejor_candidato}'")
+            return mejor_candidato
         
         logger.debug("  → No se encontró nombre de asignatura")
         return ""
@@ -1306,6 +1386,12 @@ class UnivalleScraper:
         for i in range(1, len(filas)):
             celdas = self.extraer_celdas(filas[i])
             
+            # DEBUG: Mostrar celdas extraídas
+            logger.debug(f"Fila {i}: {len(celdas)} celdas extraídas")
+            for idx, celda in enumerate(celdas):
+                if celda and celda.strip():
+                    logger.debug(f"  Celda[{idx}]: '{celda[:50]}...' " if len(celda) > 50 else f"  Celda[{idx}]: '{celda}'")
+            
             if all(not c or not c.strip() for c in celdas):
                 continue
             
@@ -1313,6 +1399,7 @@ class UnivalleScraper:
             
             # Extraer NOMBRE de asignatura usando headers específicos
             nombre_docencia = self._extraer_nombre_actividad_docencia(headers, celdas)
+            logger.debug(f"  nombre_docencia extraído: '{nombre_docencia}'")
             if nombre_docencia:
                 # Limpiar espacios múltiples y porcentajes al final
                 nombre_limpio = re.sub(r'\s*\d+%$', '', nombre_docencia).strip()
@@ -1331,7 +1418,7 @@ class UnivalleScraper:
                     actividad.horas_semestre = horas_limpia
                     logger.debug(f"  Horas extraídas: '{horas_limpia}' de columna {indice_horas}")
             
-            # Fallback: buscar horas en todas las celdas si no se encontró
+            # Fallback 1: buscar horas en todas las celdas por header
             if not actividad.horas_semestre:
                 for j, header in enumerate(headers):
                     if j < len(celdas) and 'HORAS' in header.upper():
@@ -1339,8 +1426,20 @@ class UnivalleScraper:
                         horas_limpia = re.sub(r'[^\d.,]', '', horas_raw).replace(',', '.')
                         if horas_limpia:
                             actividad.horas_semestre = horas_limpia
-                            logger.debug(f"  Horas extraídas (fallback): '{horas_limpia}' de columna {j}")
+                            logger.debug(f"  Horas extraídas (fallback header): '{horas_limpia}' de columna {j}")
                             break
+            
+            # Fallback 2: buscar número grande (>10) con decimales en las últimas celdas
+            # (típicamente las horas están al final y son números como 128.00, 116.00)
+            if not actividad.horas_semestre:
+                for j in range(len(celdas) - 1, -1, -1):  # Buscar desde el final
+                    valor = (celdas[j] or '').strip()
+                    # Buscar números con decimales >= 10 (típico de horas semestre)
+                    match = re.match(r'^(\d+)\.(\d+)$', valor)
+                    if match and float(valor) >= 10:
+                        actividad.horas_semestre = valor
+                        logger.debug(f"  Horas extraídas (fallback número grande): '{valor}' de celda {j}")
+                        break
             
             # 3. Extraer otros campos usando los índices
             if indice_codigo >= 0 and indice_codigo < len(celdas):
