@@ -248,62 +248,11 @@ class UnivalleScraper:
         return html
     
     def extraer_tablas(self, html: str) -> List[str]:
-        """
-        Extrae todas las tablas del HTML, incluyendo tablas anidadas.
-        Usa un enfoque que maneja correctamente tablas anidadas.
-        """
-        tablas = []
-        
-        # Buscar todas las posiciones de <table y </table>
-        pos = 0
-        while True:
-            # Encontrar el inicio de la siguiente tabla
-            start_match = re.search(r'<table[^>]*>', html[pos:], re.IGNORECASE)
-            if not start_match:
-                break
-            
-            start_pos = pos + start_match.start()
-            
-            # Contar niveles de anidamiento para encontrar el </table> correspondiente
-            nivel = 1
-            search_pos = start_pos + start_match.end() - pos
-            
-            while nivel > 0 and search_pos < len(html):
-                # Buscar siguiente <table> o </table>
-                next_open = re.search(r'<table[^>]*>', html[search_pos:], re.IGNORECASE)
-                next_close = re.search(r'</table>', html[search_pos:], re.IGNORECASE)
-                
-                if not next_close:
-                    break
-                
-                if next_open and next_open.start() < next_close.start():
-                    # Encontramos otra tabla anidada
-                    nivel += 1
-                    search_pos += next_open.end()
-                else:
-                    # Encontramos cierre de tabla
-                    nivel -= 1
-                    if nivel == 0:
-                        end_pos = search_pos + next_close.end()
-                        tabla_html = html[start_pos:end_pos]
-                        tablas.append(tabla_html)
-                    search_pos += next_close.end()
-            
-            pos = start_pos + 1
-        
-        # Extraer también tablas internas (anidadas) que pueden tener datos útiles
-        tablas_internas = []
-        for tabla in tablas:
-            # Buscar tablas con name="T..." (tablas de datos específicas)
-            internal_pattern = r'<table[^>]*name=["\']?T[^"\'>\s]*["\']?[^>]*>[\s\S]*?</table>'
-            internal_matches = re.findall(internal_pattern, tabla, re.IGNORECASE)
-            tablas_internas.extend(internal_matches)
-        
-        # Combinar tablas, priorizando las internas con name="T..."
-        todas_tablas = tablas_internas if tablas_internas else tablas
-        
-        logger.debug(f"Encontradas {len(tablas)} tablas principales, {len(tablas_internas)} tablas internas (name='T...')")
-        return todas_tablas if todas_tablas else tablas
+        """Extrae todas las tablas del HTML."""
+        pattern = r'<table[^>]*>[\s\S]*?</table>'
+        matches = re.findall(pattern, html, re.IGNORECASE)
+        logger.debug(f"Encontradas {len(matches)} tablas en el HTML")
+        return matches
     
     def extraer_filas(self, tabla_html: str) -> List[str]:
         """Extrae todas las filas de una tabla."""
