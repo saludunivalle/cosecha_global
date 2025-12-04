@@ -346,7 +346,7 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 14 columnas en el orden correcto
+    # 13 columnas en el orden correcto (sin Detalle Actividad)
     headers = [
         'Cedula',              # 1
         'Nombre Profesor',     # 2
@@ -356,19 +356,18 @@ def escribir_actividades_en_hojas(
         'Categoría',           # 6
         'Nombre Actividad',    # 7
         'Número de Horas',     # 8
-        'Detalle Actividad',   # 9
-        'Periodo',             # 10
-        'Actividad',           # 11
-        'Vinculación',         # 12
-        'Dedicación',          # 13
-        'Nivel',               # 14
+        'Periodo',             # 9
+        'Actividad',           # 10
+        'Vinculación',         # 11
+        'Dedicación',          # 12
+        'Nivel',               # 13
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
         try:
             logger.debug(f"Escribiendo {len(actividades)} actividades para período {periodo_label}")
             
-            # Convertir diccionarios a listas de valores (14 columnas)
+            # Convertir diccionarios a listas de valores (13 columnas)
             filas = []
             contador = 0
             for actividad in actividades:
@@ -383,6 +382,9 @@ def escribir_actividades_en_hojas(
                     logger.warning(f"⚠️ Valor de horas_semestre no convertible a float: {horas_semestre!r}. Usando 0.0")
                     horas_semestre = 0.0
                 
+                # Usar periodo_label si el periodo de la actividad está vacío
+                periodo_valor = actividad.get('periodo', '') or periodo_label
+                
                 row_data = [
                     actividad.get('cedula', ''),              # 1. Cedula
                     actividad.get('nombre_profesor', ''),     # 2. Nombre Profesor
@@ -392,19 +394,18 @@ def escribir_actividades_en_hojas(
                     actividad.get('categoria', ''),           # 6. Categoría
                     actividad.get('nombre_actividad', ''),    # 7. Nombre Actividad
                     horas_semestre,                           # 8. Número de Horas
-                    actividad.get('detalle_actividad', ''),   # 9. Detalle Actividad
-                    actividad.get('periodo', ''),             # 10. Periodo
-                    actividad.get('actividad', ''),           # 11. Actividad
-                    actividad.get('vinculacion', ''),         # 12. Vinculación
-                    actividad.get('dedicacion', ''),          # 13. Dedicación
-                    actividad.get('nivel', ''),               # 14. Nivel
+                    periodo_valor,                            # 9. Periodo
+                    actividad.get('actividad', ''),           # 10. Actividad
+                    actividad.get('vinculacion', ''),         # 11. Vinculación
+                    actividad.get('dedicacion', ''),          # 12. Dedicación
+                    actividad.get('nivel', ''),               # 13. Nivel
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
-                if len(row_data) != 14:
+                if len(row_data) != 13:
                     logger.error(
                         f"❌ Row inválido para {actividad.get('cedula', '')}: "
-                        f"tiene {len(row_data)} columnas, esperadas 14"
+                        f"tiene {len(row_data)} columnas, esperadas 13"
                     )
                     logger.error(f"   Row: {row_data}")
                     continue
