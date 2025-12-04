@@ -2207,9 +2207,15 @@ class UnivalleScraper:
         categoria_info = info.categoria or ''
         
         logger.debug(f"Procesando actividades para período {periodo_label}")
+        logger.debug(f"NIVEL ALCANZADO extraído: '{nivel}'")
+        logger.debug(f"VINCULACION extraída: '{vinculacion}'")
+        logger.debug(f"DEDICACION extraída: '{dedicacion}'")
         
         # Procesar actividades de pregrado
+        logger.debug(f"Total actividades de PREGRADO: {len(datos_docente.actividades_pregrado)}")
         for actividad in datos_docente.actividades_pregrado:
+            # Log para debug de cada actividad
+            logger.debug(f"  Pregrado - nombre_asignatura: '{actividad.nombre_asignatura}', horas_semestre: '{actividad.horas_semestre}'")
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2219,16 +2225,19 @@ class UnivalleScraper:
                 categoria='Pregrado',
                 nombre_actividad=actividad.nombre_asignatura or '',
                 numero_horas=actividad.horas_semestre,
+                detalle_actividad=f"Código: {actividad.codigo}" if actividad.codigo else '',
                 periodo=periodo_label,
-                actividad='ACTIVIDADES DE DOCENCIA',  # Valor correcto
+                actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                codigo=actividad.codigo,
-                porcentaje=actividad.porc
+                nivel=nivel
             ))
         
         # Procesar actividades de postgrado
+        logger.debug(f"Total actividades de POSTGRADO: {len(datos_docente.actividades_postgrado)}")
         for actividad in datos_docente.actividades_postgrado:
+            # Log para debug de cada actividad
+            logger.debug(f"  Postgrado - nombre_asignatura: '{actividad.nombre_asignatura}', horas_semestre: '{actividad.horas_semestre}'")
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2238,12 +2247,12 @@ class UnivalleScraper:
                 categoria='Postgrado',
                 nombre_actividad=actividad.nombre_asignatura or '',
                 numero_horas=actividad.horas_semestre,
+                detalle_actividad=f"Código: {actividad.codigo}" if actividad.codigo else '',
                 periodo=periodo_label,
-                actividad='ACTIVIDADES DE DOCENCIA',  # Valor correcto
+                actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                codigo=actividad.codigo,
-                porcentaje=actividad.porc
+                nivel=nivel
             ))
         
         # Helper para determinar categoría de investigación
@@ -2254,7 +2263,10 @@ class UnivalleScraper:
             return 'Proyecto'
         
         # Procesar actividades de investigación
+        logger.debug(f"Total actividades de INVESTIGACION: {len(datos_docente.actividades_investigacion)}")
         for actividad in datos_docente.actividades_investigacion:
+            # Log para debug de cada actividad
+            logger.debug(f"  Investigación - nombre_proyecto: '{actividad.nombre_proyecto}', horas_semestre: '{actividad.horas_semestre}'")
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2264,20 +2276,22 @@ class UnivalleScraper:
                 categoria=determinar_categoria_investigacion(actividad),
                 nombre_actividad=actividad.nombre_proyecto or '',
                 numero_horas=actividad.horas_semestre,
+                detalle_actividad=f"Código: {actividad.codigo}" if actividad.codigo else '',
                 periodo=periodo_label,
-                actividad='ACTIVIDADES DE INVESTIGACION',  # Valor correcto
+                actividad='ACTIVIDADES DE INVESTIGACION',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                codigo=actividad.codigo
+                nivel=nivel
             ))
         
         # Procesar dirección de tesis
+        logger.debug(f"Total actividades de TESIS: {len(datos_docente.actividades_tesis)}")
         for tesis in datos_docente.actividades_tesis:
             titulo_tesis = tesis.get('TITULO DE LA TESIS', '') or tesis.get('Titulo de la Tesis', '') or tesis.get('TITULO', '')
             horas_tesis = tesis.get('HORAS SEMESTRE', '') or tesis.get('Horas Semestre', '')
             codigo_est = tesis.get('CODIGO ESTUDIANTE', '') or tesis.get('Codigo Estudiante', '') or tesis.get('ESTUDIANTE', '')
             
-            logger.debug(f"Tesis - título: '{titulo_tesis}', horas: '{horas_tesis}'")
+            logger.debug(f"  Tesis - título: '{titulo_tesis}', horas: '{horas_tesis}', keys: {list(tesis.keys())}")
             
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
@@ -2288,11 +2302,12 @@ class UnivalleScraper:
                 categoria='Tesis',
                 nombre_actividad=titulo_tesis,
                 numero_horas=horas_tesis,
+                detalle_actividad=f"Código estudiante: {codigo_est}" if codigo_est else '',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                codigo=codigo_est
+                nivel=nivel
             ))
         
         # Procesar actividades de extensión
@@ -2306,10 +2321,12 @@ class UnivalleScraper:
                 categoria=actividad.get('TIPO', '') or actividad.get('Tipo', ''),
                 nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
+                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE EXTENSION',
                 vinculacion=vinculacion,
-                dedicacion=dedicacion
+                dedicacion=dedicacion,
+                nivel=nivel
             ))
         
         # Procesar actividades intelectuales
@@ -2323,10 +2340,12 @@ class UnivalleScraper:
                 categoria=actividad.get('TIPO', '') or actividad.get('Tipo', ''),
                 nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
+                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES INTELECTUALES O ARTISTICAS',
                 vinculacion=vinculacion,
-                dedicacion=dedicacion
+                dedicacion=dedicacion,
+                nivel=nivel
             ))
         
         # Procesar actividades administrativas
@@ -2340,10 +2359,12 @@ class UnivalleScraper:
                 categoria=actividad.get('CARGO', '') or actividad.get('Cargo', ''),
                 nombre_actividad=actividad.get('DESCRIPCION DEL CARGO', '') or actividad.get('DESCRIPCION', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
+                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES ADMINISTRATIVAS',
                 vinculacion=vinculacion,
-                dedicacion=dedicacion
+                dedicacion=dedicacion,
+                nivel=nivel
             ))
         
         # Procesar actividades complementarias
@@ -2357,10 +2378,12 @@ class UnivalleScraper:
                 categoria=actividad.get('PARTICIPACION EN', '') or '',
                 nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
+                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='ACTIVIDADES COMPLEMENTARIAS',
                 vinculacion=vinculacion,
-                dedicacion=dedicacion
+                dedicacion=dedicacion,
+                nivel=nivel
             ))
         
         # Procesar docente en comisión
@@ -2374,10 +2397,12 @@ class UnivalleScraper:
                 categoria=actividad.get('TIPO DE COMISION', '') or actividad.get('Tipo de Comision', ''),
                 nombre_actividad=actividad.get('DESCRIPCION', '') or actividad.get('Descripcion', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
+                detalle_actividad='',
                 periodo=periodo_label,
                 actividad='DOCENTE EN COMISION',
                 vinculacion=vinculacion,
-                dedicacion=dedicacion
+                dedicacion=dedicacion,
+                nivel=nivel
             ))
         
         logger.debug(f"Total actividades extraídas: {len(actividades)}")
@@ -2393,17 +2418,20 @@ class UnivalleScraper:
         categoria: str,
         nombre_actividad: str,
         numero_horas: str,
+        detalle_actividad: str,
         periodo: str,
         actividad: str,
         vinculacion: str,
         dedicacion: str,
+        nivel: str,
         **kwargs
     ) -> Dict[str, Any]:
         """
         Construye un diccionario con los 14 campos requeridos para una actividad.
         
-        Args:
-            **kwargs: Campos adicionales opcionales (codigo, porcentaje, etc.)
+        Orden: cedula, nombre profesor, escuela, departamento, tipo actividad, 
+               categoría, nombre actividad, número de horas, detalle actividad,
+               periodo, actividad, vinculación, dedicación, nivel
         
         Returns:
             Diccionario con todos los campos de la actividad
@@ -2422,7 +2450,7 @@ class UnivalleScraper:
         escuela_limpia = limpiar_escuela(escuela)
         departamento_limpio = limpiar_departamento(departamento)
         
-        # Construir diccionario (14 campos, sin detalle_actividad, nivel, cargo)
+        # Construir diccionario (14 campos en orden correcto)
         actividad_dict = {
             'cedula': str(cedula),
             'nombre_profesor': str(nombre_profesor),
@@ -2432,11 +2460,13 @@ class UnivalleScraper:
             'categoria': str(categoria),
             'nombre_actividad': nombre_actividad_limpio,
             'numero_horas': horas_numero,
+            'detalle_actividad': str(detalle_actividad) if detalle_actividad else '',
             'periodo': str(periodo),
             'actividad': str(actividad),
             'vinculacion': str(vinculacion),
             'dedicacion': str(dedicacion),
-            **kwargs  # Incluir campos adicionales (codigo, porcentaje)
+            'nivel': str(nivel) if nivel else '',
+            **kwargs
         }
         
         return actividad_dict

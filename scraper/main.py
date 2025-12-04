@@ -346,22 +346,22 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 14 columnas (sin Detalle actividad, Nivel, Cargo)
+    # 14 columnas en el orden correcto
     headers = [
         'Cedula',              # 1
         'Nombre Profesor',     # 2
         'Escuela',             # 3
         'Departamento',        # 4
-        'Tipo de Actividad',   # 5
-        'Categoria',           # 6
-        'Nombre de actividad', # 7
-        'Numero de horas',     # 8
-        'id',                  # 9
-        'Período',             # 10
-        'Porcentaje Horas',    # 11
-        'Actividad',           # 12
-        'Vinculación',         # 13
-        'Dedicación',          # 14
+        'Tipo Actividad',      # 5
+        'Categoría',           # 6
+        'Nombre Actividad',    # 7
+        'Número de Horas',     # 8
+        'Detalle Actividad',   # 9
+        'Periodo',             # 10
+        'Actividad',           # 11
+        'Vinculación',         # 12
+        'Dedicación',          # 13
+        'Nivel',               # 14
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
@@ -383,27 +383,21 @@ def escribir_actividades_en_hojas(
                     logger.warning(f"⚠️ Valor de horas_semestre no convertible a float: {horas_semestre!r}. Usando 0.0")
                     horas_semestre = 0.0
                 
-                # Extraer porcentaje de horas si existe
-                porcentaje_horas = actividad.get('porcentaje', '') or actividad.get('porc', '') or ''
-                
-                # Extraer ID/código de la actividad
-                id_actividad = actividad.get('codigo', '') or actividad.get('id', '') or ''
-                
                 row_data = [
-                    actividad.get('cedula', ''),             # 1. Cedula
-                    actividad.get('nombre_profesor', ''),    # 2. Nombre Profesor
-                    actividad.get('escuela', ''),            # 3. Escuela
-                    actividad.get('departamento', ''),       # 4. Departamento
-                    actividad.get('tipo_actividad', ''),     # 5. Tipo de Actividad
-                    actividad.get('categoria', ''),          # 6. Categoria
-                    actividad.get('nombre_actividad', ''),   # 7. Nombre de actividad
-                    horas_semestre,                          # 8. Numero de horas (float, nunca vacío)
-                    id_actividad,                            # 9. id (código de la actividad)
-                    actividad.get('periodo', ''),            # 10. Período
-                    porcentaje_horas,                        # 11. Porcentaje Horas
-                    actividad.get('actividad', ''),          # 12. Actividad
-                    actividad.get('vinculacion', ''),        # 13. Vinculación
-                    actividad.get('dedicacion', ''),         # 14. Dedicación
+                    actividad.get('cedula', ''),              # 1. Cedula
+                    actividad.get('nombre_profesor', ''),     # 2. Nombre Profesor
+                    actividad.get('escuela', ''),             # 3. Escuela
+                    actividad.get('departamento', ''),        # 4. Departamento
+                    actividad.get('tipo_actividad', ''),      # 5. Tipo Actividad
+                    actividad.get('categoria', ''),           # 6. Categoría
+                    actividad.get('nombre_actividad', ''),    # 7. Nombre Actividad
+                    horas_semestre,                           # 8. Número de Horas
+                    actividad.get('detalle_actividad', ''),   # 9. Detalle Actividad
+                    actividad.get('periodo', ''),             # 10. Periodo
+                    actividad.get('actividad', ''),           # 11. Actividad
+                    actividad.get('vinculacion', ''),         # 12. Vinculación
+                    actividad.get('dedicacion', ''),          # 13. Dedicación
+                    actividad.get('nivel', ''),               # 14. Nivel
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
