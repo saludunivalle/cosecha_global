@@ -409,12 +409,15 @@ class UnivalleScraper:
         """Verifica si es tabla de investigación."""
         texto = self.extraer_texto_de_celda(tabla_html).upper()
         tiene_titulo = 'ACTIVIDADES DE INVESTIGACION' in texto
-        tiene_codigo = 'CODIGO' in texto
+        # CODIGO es opcional - algunas tablas de investigación no lo tienen
         tiene_nombre = ('NOMBRE DEL PROYECTO' in texto or
-                       'NOMBRE DEL ANTEPROYECTO' in texto)
+                       'NOMBRE DEL ANTEPROYECTO' in texto or
+                       'PROPUESTA DE INVESTIGACION' in texto)
         tiene_horas = 'HORAS SEMESTRE' in texto
+        tiene_aprobado = 'APROBADO' in texto
         
-        return tiene_titulo and tiene_codigo and tiene_nombre and tiene_horas
+        # La tabla de investigación debe tener el título, nombre del proyecto/anteproyecto y horas
+        return tiene_titulo and tiene_nombre and tiene_horas
     
     def _es_tabla_tesis(self, headers_upper: List[str]) -> bool:
         """Verifica si es tabla de tesis."""
@@ -1467,20 +1470,26 @@ class UnivalleScraper:
         if not filas_internas:
             filas_internas = filas
         
-        # Buscar fila de headers
+        # Buscar fila de headers - más flexible, no requiere CODIGO
         header_index = -1
         headers_actuales = headers
         
         for i in range(min(10, len(filas_internas))):
             fila_texto = self.extraer_texto_de_celda(filas_internas[i]).upper()
-            if ('CODIGO' in fila_texto and
-                'NOMBRE DEL PROYECTO' in fila_texto and
-                'HORAS SEMESTRE' in fila_texto):
+            # Buscar por nombre del proyecto/anteproyecto Y horas - CODIGO es opcional
+            tiene_nombre_proyecto = ('NOMBRE DEL PROYECTO' in fila_texto or 
+                                     'NOMBRE DEL ANTEPROYECTO' in fila_texto or
+                                     'PROPUESTA DE INVESTIGACION' in fila_texto)
+            tiene_horas = 'HORAS SEMESTRE' in fila_texto or 'HORAS' in fila_texto
+            
+            if tiene_nombre_proyecto and tiene_horas:
                 header_index = i
                 headers_actuales = self.extraer_celdas(filas_internas[i])
+                logger.debug(f"Headers de investigación encontrados en fila {i}: {headers_actuales}")
                 break
         
         if header_index == -1:
+            logger.debug("No se encontró fila de headers para investigación")
             return actividades
         
         # Procesar filas de datos
@@ -1499,16 +1508,20 @@ class UnivalleScraper:
                     
                     if 'CODIGO' in header_upper:
                         actividad.codigo = valor
-                    elif 'APROBADO' in header_upper and 'POR' in header_upper:
+                    elif 'APROBADO' in header_upper:
                         actividad.aprobado_por = valor
-                    elif 'NOMBRE' in header_upper and ('PROYECTO' in header_upper or 'ANTEPROYECTO' in header_upper):
-                        actividad.nombre_proyecto = valor
+                    elif 'NOMBRE' in header_upper or 'ANTEPROYECTO' in header_upper or 'PROPUESTA' in header_upper:
+                        # Captura cualquier columna que tenga NOMBRE, ANTEPROYECTO o PROPUESTA
+                        if not actividad.nombre_proyecto:  # Solo asignar si está vacío
+                            actividad.nombre_proyecto = valor
                     elif 'HORAS' in header_upper:
                         actividad.horas_semestre = valor
             
             if actividad.nombre_proyecto or actividad.horas_semestre:
+                logger.debug(f"Actividad de investigación encontrada: {actividad.nombre_proyecto} - {actividad.horas_semestre}h")
                 actividades.append(actividad)
         
+        logger.debug(f"Total actividades de investigación procesadas: {len(actividades)}")
         return actividades
     
     def _procesar_tesis(
@@ -1604,7 +1617,17 @@ class UnivalleScraper:
         id_periodo: int,
         resultado: DatosDocente
     ):
-        """Procesa otras actividades (extensión, administrativas, etc.)."""
+        """Procesa otras actividades (extensión, administrativas, intelectuales, etc.)."""
+        # Primero verificar si es tabla de actividades intelectuales/artísticas
+        texto_tabla = self.extraer_texto_de_celda(tabla_html).upper()
+        
+        # Actividades intelectuales o artísticas
+        if 'ACTIVIDADES INTELECTUALES' in texto_tabla or 'ARTISTICAS' in texto_tabla:
+            actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            resultado.actividades_intelectuales.extend(actividades)
+            logger.debug(f"Actividades intelectuales/artísticas encontradas: {len(actividades)}")
+            return  # Evitar que caiga en otras condiciones
+        
         # Actividades complementarias
         if any('PARTICIPACION EN' in h for h in headers_upper):
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
