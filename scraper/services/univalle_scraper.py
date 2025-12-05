@@ -302,6 +302,95 @@ class UnivalleScraper:
         
         return celdas
     
+    def _detectar_seccion_titulo(self, tabla_html: str) -> Optional[str]:
+        """
+        Detecta si una tabla es solo un título de sección.
+        
+        En el HTML de Univalle, los títulos de sección están en tablas separadas
+        de los datos. Esta función detecta esas tablas de título.
+        
+        Returns:
+            Nombre de la sección si es una tabla de título, None si no lo es
+        """
+        texto = self.extraer_texto_de_celda(tabla_html).upper()
+        
+        # Detectar tablas que son solo títulos de sección
+        if 'ACTIVIDADES DE INVESTIGACION' in texto and 'APROBADO' not in texto:
+            return 'INVESTIGACION'
+        if ('ACTIVIDADES INTELECTUALES' in texto or 'ARTISTICAS' in texto) and 'APROBADO' not in texto:
+            return 'INTELECTUALES'
+        if 'ACTIVIDADES DE EXTENSION' in texto and 'TIPO' not in texto:
+            return 'EXTENSION'
+        if 'ACTIVIDADES ADMINISTRATIVAS' in texto and 'CARGO' not in texto:
+            return 'ADMINISTRATIVAS'
+        if 'ACTIVIDADES COMPLEMENTARIAS' in texto and 'PARTICIPACION' not in texto:
+            return 'COMPLEMENTARIAS'
+        if 'DOCENTE EN COMISION' in texto and 'TIPO DE COMISION' not in texto:
+            return 'COMISION'
+        
+        return None
+    
+    def _procesar_tabla_con_contexto(
+        self,
+        tabla_html: str,
+        filas: List[str],
+        headers: List[str],
+        id_periodo: int,
+        seccion_contexto: str,
+        resultado: DatosDocente
+    ):
+        """
+        Procesa una tabla de datos usando el contexto de la sección anterior.
+        
+        En el HTML de Univalle, las tablas de datos suelen estar anidadas dentro
+        de una tabla contenedora. Esta función busca la tabla interna real.
+        
+        Args:
+            tabla_html: HTML de la tabla
+            filas: Filas extraídas de la tabla
+            headers: Headers de la primera fila
+            id_periodo: ID del período
+            seccion_contexto: Tipo de sección (INVESTIGACION, INTELECTUALES, etc.)
+            resultado: Objeto donde guardar los resultados
+        """
+        logger.debug(f"Procesando tabla con contexto de sección: {seccion_contexto}")
+        
+        # Buscar tabla anidada (los datos reales suelen estar en una tabla interna)
+        tabla_interna = self._buscar_tabla_anidada(tabla_html)
+        if tabla_interna:
+            logger.debug("Encontrada tabla anidada, usando tabla interna")
+            filas = self.extraer_filas(tabla_interna)
+            if filas:
+                headers = self.extraer_celdas(filas[0])
+        
+        if seccion_contexto == 'INVESTIGACION':
+            investigacion = self._procesar_investigacion(
+                tabla_html, filas, headers, id_periodo
+            )
+            resultado.actividades_investigacion.extend(investigacion)
+            logger.debug(f"Agregadas {len(investigacion)} actividades de investigación")
+        
+        elif seccion_contexto == 'INTELECTUALES':
+            actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            resultado.actividades_intelectuales.extend(actividades)
+            logger.debug(f"Agregadas {len(actividades)} actividades intelectuales")
+        
+        elif seccion_contexto == 'EXTENSION':
+            actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            resultado.actividades_extension.extend(actividades)
+        
+        elif seccion_contexto == 'ADMINISTRATIVAS':
+            actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            resultado.actividades_administrativas.extend(actividades)
+        
+        elif seccion_contexto == 'COMPLEMENTARIAS':
+            actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            resultado.actividades_complementarias.extend(actividades)
+        
+        elif seccion_contexto == 'COMISION':
+            actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            resultado.docente_en_comision.extend(actividades)
+    
     def procesar_docente(self, cedula: str, id_periodo: int) -> DatosDocente:
         """
         Procesa un docente completo y retorna todos sus datos.
@@ -323,8 +412,20 @@ class UnivalleScraper:
         
         tablas = self.extraer_tablas(html)
         
+        # Variable para guardar el contexto de la sección actual
+        # Esto es necesario porque en el HTML de Univalle, los títulos de sección
+        # están en tablas separadas de los datos
+        seccion_actual = None
+        
         for tabla_idx, tabla_html in enumerate(tablas, 1):
             logger.debug(f"Procesando tabla {tabla_idx}/{len(tablas)}")
+            
+            # Primero verificar si es una tabla de título de sección
+            seccion_detectada = self._detectar_seccion_titulo(tabla_html)
+            if seccion_detectada:
+                seccion_actual = seccion_detectada
+                logger.debug(f"Detectada sección: {seccion_actual}")
+                continue  # Pasar a la siguiente tabla (que tendrá los datos)
             
             filas = self.extraer_filas(tabla_html)
             if not filas:
@@ -333,7 +434,15 @@ class UnivalleScraper:
             headers = self.extraer_celdas(filas[0])
             headers_upper = [h.upper() for h in headers]
             
-            # Identificar y procesar según tipo
+            # Si tenemos contexto de sección, procesar con ese contexto
+            if seccion_actual:
+                self._procesar_tabla_con_contexto(
+                    tabla_html, filas, headers, id_periodo, seccion_actual, resultado
+                )
+                seccion_actual = None  # Limpiar el contexto después de usar
+                continue
+            
+            # Identificar y procesar según tipo (sin contexto previo)
             if self._es_tabla_informacion_personal(headers_upper):
                 self._procesar_informacion_personal(
                     tabla_html, filas, resultado.informacion_personal
@@ -373,7 +482,8 @@ class UnivalleScraper:
             f"Procesamiento completado: "
             f"Pregrado={len(resultado.actividades_pregrado)}, "
             f"Postgrado={len(resultado.actividades_postgrado)}, "
-            f"Investigación={len(resultado.actividades_investigacion)}"
+            f"Investigación={len(resultado.actividades_investigacion)}, "
+            f"Intelectuales={len(resultado.actividades_intelectuales)}"
         )
         
         return resultado
@@ -2188,8 +2298,20 @@ class UnivalleScraper:
         
         tablas = self.extraer_tablas(html)
         
+        # Variable para guardar el contexto de la sección actual
+        # Esto es necesario porque en el HTML de Univalle, los títulos de sección
+        # están en tablas separadas de los datos
+        seccion_actual = None
+        
         for tabla_idx, tabla_html in enumerate(tablas, 1):
             logger.debug(f"Procesando tabla {tabla_idx}/{len(tablas)}")
+            
+            # Primero verificar si es una tabla de título de sección
+            seccion_detectada = self._detectar_seccion_titulo(tabla_html)
+            if seccion_detectada:
+                seccion_actual = seccion_detectada
+                logger.debug(f"Detectada sección: {seccion_actual}")
+                continue  # Pasar a la siguiente tabla (que tendrá los datos)
             
             filas = self.extraer_filas(tabla_html)
             if not filas:
@@ -2198,7 +2320,15 @@ class UnivalleScraper:
             headers = self.extraer_celdas(filas[0])
             headers_upper = [h.upper() for h in headers]
             
-            # Identificar y procesar según tipo
+            # Si tenemos contexto de sección, procesar con ese contexto
+            if seccion_actual:
+                self._procesar_tabla_con_contexto(
+                    tabla_html, filas, headers, id_periodo, seccion_actual, resultado
+                )
+                seccion_actual = None  # Limpiar el contexto después de usar
+                continue
+            
+            # Identificar y procesar según tipo (sin contexto previo)
             if self._es_tabla_informacion_personal(headers_upper):
                 self._procesar_informacion_personal(
                     tabla_html, filas, resultado.informacion_personal
