@@ -83,12 +83,44 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
 
   // Procesar cada tabla individualmente
   let contadorTablas = 0;
+  
+  // Variable para rastrear la sección actual (pregrado/postgrado)
+  let seccionActual: 'pregrado' | 'postgrado' | null = null;
 
   tableMatches.forEach((tableHtml) => {
     contadorTablas++;
     debugLog(`\n=== PROCESANDO TABLA ${contadorTablas}/${tableMatches.length} ===`);
 
     const rowMatches = extraerFilas(tableHtml);
+    
+    // Detectar si es una tabla de subtítulo de sección (PREGRADO/POSTGRADO/DIRECCION DE TESIS)
+    // Las tablas de subtítulo típicamente:
+    // 1. Tienen pocas filas (1-2)
+    // 2. NO contienen headers de asignaturas (CODIGO, NOMBRE DE ASIGNATURA, HORAS SEMESTRE)
+    // 3. Contienen solo el texto del subtítulo
+    const textoTabla = tableHtml.toUpperCase();
+    const esTablaDeSubtitulo = rowMatches.length <= 2 && 
+                               !textoTabla.includes('NOMBRE DE ASIGNATURA') &&
+                               !textoTabla.includes('HORAS SEMESTRE') &&
+                               !textoTabla.includes('CODIGO ESTUDIANTE');
+    
+    if (esTablaDeSubtitulo) {
+      // Buscar el texto limpio de la tabla para detectar subtítulos
+      const textoLimpio = tableHtml.replace(/<[^>]+>/g, ' ').toUpperCase().trim();
+      
+      if (textoLimpio.includes('DIRECCION') && textoLimpio.includes('TESIS')) {
+        // Resetear sección cuando llegamos a tesis (no aplica pregrado/postgrado)
+        seccionActual = null;
+        debugLog(`📌 Detectado subtítulo de sección: DIRECCION DE TESIS (reseteando sección)`);
+      } else if (textoLimpio.includes('POSTGRADO') || textoLimpio.includes('POSGRADO')) {
+        seccionActual = 'postgrado';
+        debugLog(`📌 Detectado subtítulo de sección: POSTGRADO`);
+      } else if (textoLimpio.includes('PREGRADO') && !textoLimpio.includes('POSTGRADO')) {
+        seccionActual = 'pregrado';
+        debugLog(`📌 Detectado subtítulo de sección: PREGRADO`);
+      }
+    }
+
     if (rowMatches.length === 0) {
       debugLog(`⚠️ Tabla ${contadorTablas} no tiene filas, omitiendo`);
       return;
@@ -100,6 +132,7 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
 
     debugLog(`📋 Headers encontrados:`, headers);
     debugLog(`📋 Headers normalizados:`, headersNorm);
+    debugLog(`📋 Sección actual: ${seccionActual || 'ninguna'}`);
 
     // Procesar diferentes tipos de tablas
     procesarTablaInformacionPersonal(
@@ -128,7 +161,8 @@ export function procesarHTML(html: string, idPeriod: number): DatosDocente[] {
       headersNorm,
       headerRowIndex,
       contadorTablas,
-      actividadesDocencia
+      actividadesDocencia,
+      seccionActual
     );
 
     procesarTablaTesis(

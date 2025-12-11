@@ -306,6 +306,7 @@ export function esTablaTesis(headersNorm: string[]): boolean {
 
 /**
  * Procesa una tabla de asignaturas (pregrado/postgrado)
+ * @param seccionActual - Si se detectó un subtítulo de sección previo ('pregrado' o 'postgrado'), usar para clasificar
  */
 export function procesarTablaAsignaturas(
   rowMatches: string[],
@@ -313,7 +314,8 @@ export function procesarTablaAsignaturas(
   headersNorm: string[],
   headerRowIndex: number,
   contadorTablas: number,
-  actividadesDocencia: ActividadesDocencia
+  actividadesDocencia: ActividadesDocencia,
+  seccionActual: 'pregrado' | 'postgrado' | null = null
 ): void {
   const tieneCodigoAsignatura = headersNorm.some((h) => h === 'CODIGO' || (h.includes('CODIGO') && !h.includes('ESTUDIANTE')));
   const tieneNombreAsignatura = headersNorm.some((h) => h.includes('NOMBRE') && h.includes('ASIGNATURA'));
@@ -330,6 +332,7 @@ export function procesarTablaAsignaturas(
   
   if (esTablaAsignaturas) {
     debugLog(`✅ Tabla ${contadorTablas} detectada como ASIGNATURAS (pregrado/postgrado)`);
+    debugLog(`📌 Sección actual desde contexto: ${seccionActual || 'ninguna (usará heurística)'}`);
 
     for (let ri = headerRowIndex + 1; ri < rowMatches.length; ri++) {
       const row = rowMatches[ri];
@@ -359,7 +362,19 @@ export function procesarTablaAsignaturas(
         continue;
       }
 
-      const esPostgrado = esActividadPostgrado(estructuraNormalizada);
+      // Clasificar usando el subtítulo de sección si está disponible,
+      // de lo contrario usar la heurística basada en código/nombre
+      let esPostgrado: boolean;
+      
+      if (seccionActual) {
+        // Usar la sección detectada del HTML
+        esPostgrado = seccionActual === 'postgrado';
+        debugLog(`     🎓 Clasificado como ${esPostgrado ? 'POSTGRADO' : 'PREGRADO'} por sección del HTML`);
+      } else {
+        // Fallback: usar heurística basada en código y nombre
+        esPostgrado = esActividadPostgrado(estructuraNormalizada);
+        debugLog(`     🎓 Clasificado como ${esPostgrado ? 'POSTGRADO' : 'PREGRADO'} por heurística`);
+      }
 
       if (esPostgrado) {
         actividadesDocencia.postgrado.push(estructuraNormalizada);
