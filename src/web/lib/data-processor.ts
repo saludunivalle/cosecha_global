@@ -39,11 +39,12 @@ export function extraerHorasSemestre(valor: string | number): number {
  */
 function generarIdActividad(actividad: Record<string, any>): string {
   // Campos clave que identifican únicamente una actividad
-  const codigo = String(actividad.CODIGO || actividad['CODIGO ESTUDIANTE'] || '').trim();
+  const codigo = String(actividad.CODIGO || actividad['CODIGO ESTUDIANTE'] || actividad['APROBADO POR'] || '').trim();
   const nombre = String(
     actividad['NOMBRE DE ASIGNATURA'] ||
     actividad.NOMBRE ||
     actividad['TITULO DE LA TESIS'] ||
+    actividad['NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION'] ||
     actividad['NOMBRE DEL PROYECTO DE INVESTIGACION'] ||
     actividad['DESCRIPCION DEL CARGO'] ||
     actividad['TIPO DE COMISION'] ||
@@ -191,8 +192,8 @@ export function obtenerColumnasPorTipo(tipoActividad: string): string[] {
     ],
     direcciondetesis: ['CODIGO ESTUDIANTE', 'COD PLAN', 'TITULO DE LA TESIS', 'HORAS SEMESTRE'],
     actividadesdeinvestigacion: [
-      'CODIGO',
-      'NOMBRE DEL PROYECTO DE INVESTIGACION',
+      'APROBADO POR',
+      'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION',
       'HORAS SEMESTRE',
     ],
     actividadesdeextension: ['TIPO', 'NOMBRE', 'HORAS SEMESTRE'],
@@ -240,7 +241,8 @@ export function mapearColumna(nombreOriginal: string): string {
     'COD PLAN': 'COD PLAN',
     'TITULO DE LA TESIS': 'TITULO DE LA TESIS',
     // Investigación
-    'NOMBRE DEL PROYECTO DE INVESTIGACION': 'NOMBRE DEL PROYECTO DE INVESTIGACION',
+    'NOMBRE DEL PROYECTO DE INVESTIGACION': 'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION',
+    'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION': 'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION',
     // Extensión / Intelectuales / Complementarias
     NOMBRE: 'NOMBRE',
     // Intelectuales
@@ -267,9 +269,11 @@ export function mapearColumna(nombreOriginal: string): string {
     return mapeo[nombreUpper];
   }
 
-  // Mapeo flexible para variaciones
-  if (nombreUpper.includes('PROYECTO DE INVESTIGACION'))
-    return 'NOMBRE DEL PROYECTO DE INVESTIGACION';
+  // Mapeo flexible para variaciones de investigación
+  if (nombreUpper.includes('ANTEPROYECTO') || 
+      nombreUpper.includes('PROPUESTA DE INVESTIGACION') ||
+      nombreUpper.includes('PROYECTO DE INVESTIGACION'))
+    return 'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION';
 
   return nombreOriginal;
 }

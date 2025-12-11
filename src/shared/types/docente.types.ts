@@ -49,8 +49,8 @@ export interface ActividadesDocencia {
 }
 
 export interface ActividadInvestigacion {
-  CODIGO?: string;
-  'NOMBRE DEL PROYECTO DE INVESTIGACION': string;
+  'APROBADO POR'?: string;
+  'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION': string;
   'HORAS SEMESTRE': string | number;
   [key: string]: any;
 }
