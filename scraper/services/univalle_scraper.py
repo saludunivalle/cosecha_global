@@ -314,7 +314,29 @@ class UnivalleScraper:
         """
         texto = self.extraer_texto_de_celda(tabla_html).upper()
         
-        # Detectar tablas que son solo títulos de sección
+        # Verificar si es una tabla pequeña (típicamente los subtítulos tienen poco texto)
+        # y NO contiene headers de datos (CODIGO, NOMBRE DE ASIGNATURA, HORAS SEMESTRE, etc.)
+        es_tabla_datos = (
+            'NOMBRE DE ASIGNATURA' in texto or 
+            'HORAS SEMESTRE' in texto or 
+            'CODIGO ESTUDIANTE' in texto or
+            'APROBADO POR' in texto
+        )
+        
+        # Detectar PREGRADO, POSTGRADO y DIRECCION DE TESIS (actividades de docencia)
+        # Solo si NO es una tabla de datos
+        if not es_tabla_datos:
+            # DIRECCION DE TESIS - verificar primero para evitar conflictos
+            if 'DIRECCION' in texto and 'TESIS' in texto:
+                return 'TESIS'
+            # POSTGRADO (con o sin T)
+            if ('POSTGRADO' in texto or 'POSGRADO' in texto) and 'PREGRADO' not in texto and 'TOTAL' not in texto:
+                return 'POSTGRADO'
+            # PREGRADO
+            if 'PREGRADO' in texto and 'POSTGRADO' not in texto and 'POSGRADO' not in texto and 'TOTAL' not in texto:
+                return 'PREGRADO'
+        
+        # Detectar tablas que son solo títulos de sección (otras actividades)
         if 'ACTIVIDADES DE INVESTIGACION' in texto and 'APROBADO' not in texto:
             return 'INVESTIGACION'
         if ('ACTIVIDADES INTELECTUALES' in texto or 'ARTISTICAS' in texto) and 'APROBADO' not in texto:
@@ -390,6 +412,24 @@ class UnivalleScraper:
         elif seccion_contexto == 'COMISION':
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
             resultado.docente_en_comision.extend(actividades)
+        
+        elif seccion_contexto == 'PREGRADO':
+            # Procesar asignaturas de pregrado usando la sección detectada
+            actividades = self._procesar_asignaturas_con_seccion(filas, headers, id_periodo, 'pregrado')
+            resultado.actividades_pregrado.extend(actividades)
+            logger.debug(f"Agregadas {len(actividades)} actividades de PREGRADO")
+        
+        elif seccion_contexto == 'POSTGRADO':
+            # Procesar asignaturas de postgrado usando la sección detectada
+            actividades = self._procesar_asignaturas_con_seccion(filas, headers, id_periodo, 'postgrado')
+            resultado.actividades_postgrado.extend(actividades)
+            logger.debug(f"Agregadas {len(actividades)} actividades de POSTGRADO")
+        
+        elif seccion_contexto == 'TESIS':
+            # Procesar dirección de tesis
+            tesis = self._procesar_tesis(filas, headers, id_periodo)
+            resultado.actividades_tesis.extend(tesis)
+            logger.debug(f"Agregadas {len(tesis)} actividades de TESIS")
     
     def procesar_docente(self, cedula: str, id_periodo: int) -> DatosDocente:
         """
@@ -1562,6 +1602,105 @@ class UnivalleScraper:
                     logger.debug(f"  ✓ Pregrado: '{actividad.nombre_asignatura}' - {actividad.horas_semestre}h")
         
         return pregrado, postgrado
+    
+    def _procesar_asignaturas_con_seccion(
+        self,
+        filas: List[str],
+        headers: List[str],
+        id_periodo: int,
+        seccion: str
+    ) -> List[ActividadAsignatura]:
+        """
+        Procesa asignaturas usando la sección detectada (pregrado/postgrado).
+        
+        A diferencia de _procesar_asignaturas, esta función NO clasifica usando
+        heurísticas - usa directamente la sección detectada del HTML.
+        
+        Args:
+            filas: Filas de la tabla
+            headers: Headers de la tabla
+            id_periodo: ID del período
+            seccion: 'pregrado' o 'postgrado'
+            
+        Returns:
+            Lista de ActividadAsignatura
+        """
+        actividades = []
+        
+        # Identificar índices de columnas
+        indice_horas = -1
+        indice_codigo = -1
+        indice_grupo = -1
+        indice_tipo = -1
+        indice_nombre = -1
+        
+        logger.debug(f"Procesando asignaturas de {seccion.upper()} con {len(filas)} filas")
+        logger.debug(f"Headers: {headers}")
+        
+        for j, header in enumerate(headers):
+            header_upper = header.upper().strip()
+            
+            if 'HORAS' in header_upper and 'SEMESTRE' in header_upper:
+                indice_horas = j
+            elif 'HORAS' in header_upper and indice_horas < 0:
+                indice_horas = j
+            elif 'CODIGO' in header_upper and 'ESTUDIANTE' not in header_upper:
+                indice_codigo = j
+            elif 'GRUPO' in header_upper:
+                indice_grupo = j
+            elif 'TIPO' in header_upper and 'COMISION' not in header_upper:
+                indice_tipo = j
+            elif 'NOMBRE' in header_upper and 'ASIGNATURA' in header_upper:
+                indice_nombre = j
+        
+        for i in range(1, len(filas)):
+            celdas = self.extraer_celdas(filas[i])
+            
+            if all(not c or not c.strip() for c in celdas):
+                continue
+            
+            actividad = ActividadAsignatura(periodo=id_periodo)
+            
+            # Extraer NOMBRE de asignatura
+            nombre_docencia = self._extraer_nombre_actividad_docencia(headers, celdas)
+            if nombre_docencia:
+                nombre_limpio = re.sub(r'\s*\d+%$', '', nombre_docencia).strip()
+                nombre_limpio = re.sub(r'\s+', ' ', nombre_limpio).strip()
+                actividad.nombre_asignatura = nombre_limpio
+            
+            # Extraer HORAS
+            if indice_horas >= 0 and indice_horas < len(celdas):
+                horas_raw = celdas[indice_horas].strip() if celdas[indice_horas] else ''
+                horas_limpia = re.sub(r'[^\d.,]', '', horas_raw).replace(',', '.')
+                if horas_limpia:
+                    try:
+                        actividad.horas_semestre = str(float(horas_limpia))
+                    except ValueError:
+                        actividad.horas_semestre = '0'
+                else:
+                    actividad.horas_semestre = '0'
+            
+            # Extraer CÓDIGO
+            if indice_codigo >= 0 and indice_codigo < len(celdas):
+                actividad.codigo = celdas[indice_codigo].strip()
+            
+            # Extraer GRUPO
+            if indice_grupo >= 0 and indice_grupo < len(celdas):
+                actividad.grupo = celdas[indice_grupo].strip()
+            
+            # Extraer TIPO
+            if indice_tipo >= 0 and indice_tipo < len(celdas):
+                actividad.tipo = celdas[indice_tipo].strip()
+            
+            # Agregar actividad si tiene datos mínimos
+            if actividad.codigo or actividad.nombre_asignatura:
+                actividades.append(actividad)
+                logger.info(
+                    f"   ✅ {seccion.upper()}: "
+                    f"{actividad.codigo} - {actividad.nombre_asignatura} ({actividad.horas_semestre}h)"
+                )
+        
+        return actividades
     
     def _procesar_investigacion(
         self,
