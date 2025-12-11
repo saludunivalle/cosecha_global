@@ -11,6 +11,56 @@ const UNIVALLE_PORTAL_URL =
   process.env.UNIVALLE_PORTAL_URL || 'https://proxse26.univalle.edu.co/asignacion';
 
 /**
+ * Corrige problemas de codificación "mojibake" en el HTML
+ * (UTF-8 interpretado como ISO-8859-1)
+ */
+function corregirCodificacionHTML(html: string): string {
+  if (!html) return html;
+  
+  let resultado = html;
+  
+  // Mapeo de secuencias mojibake comunes a caracteres correctos
+  const reemplazos: Array<[string, string]> = [
+    // Vocales mayúsculas con tilde
+    ["Ã\x81", "Á"],
+    ["Ã‰", "É"],
+    ["Ã\x89", "É"],
+    ["Ã\x8D", "Í"],
+    ["ÃA", "Í"],
+    ["Ã", "Ó"],
+    ["Ã\x93", "Ó"],
+    ["Ãš", "Ú"],
+    ["Ã\x9A", "Ú"],
+    // Eñe - usando código de escape para el apóstrofe
+    ["Ã\x91", "Ñ"],
+    ["Ã\u0091", "Ñ"],
+    ["Ã±", "ñ"],
+    // Vocales minúsculas con tilde
+    ["Ã¡", "á"],
+    ["Ã©", "é"],
+    ["Ã­", "í"],
+    ["Ã³", "ó"],
+    ["Ãº", "ú"],
+    // Diéresis
+    ["Ã¼", "ü"],
+    ["Ãœ", "Ü"],
+    // Otros
+    ["Â°", "°"],
+    ["Â¿", "¿"],
+    ["Â¡", "¡"],
+  ];
+  
+  for (const [mojibake, correcto] of reemplazos) {
+    resultado = resultado.split(mojibake).join(correcto);
+  }
+  
+  // Patrón adicional para Ñ con apóstrofe: Ã'
+  resultado = resultado.replace(/Ã'/g, "Ñ");
+  
+  return resultado;
+}
+
+/**
  * Construye headers de autenticación basado en cookies
  */
 function buildAuthHeaders(cookies: { PHPSESSID?: string; asigacad?: string }): Record<string, string> {
@@ -147,6 +197,10 @@ export async function extraerDatosDocenteUnivalle(
       throw new Error('El servidor devolvió una página de error');
     }
 
+    // Aplicar corrección de codificación al HTML completo antes de procesar
+    // Esto corrige problemas de mojibake (UTF-8 interpretado como ISO-8859-1)
+    html = corregirCodificacionHTML(html);
+    
     // Procesar HTML directamente - el procesador determinará si hay datos válidos
     console.log(`🔄 Procesando HTML...`);
     const resultado = procesarHTML(html, idPeriod);
