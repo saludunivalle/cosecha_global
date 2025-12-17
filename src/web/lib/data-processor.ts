@@ -192,7 +192,7 @@ export function obtenerColumnasPorTipo(tipoActividad: string): string[] {
     ],
     direcciondetesis: ['CODIGO ESTUDIANTE', 'COD PLAN', 'TITULO DE LA TESIS', 'HORAS SEMESTRE'],
     actividadesdeinvestigacion: [
-      'APROBADO POR',
+      'CODIGO',
       'NOMBRE DEL ANTEPROYECTO O PROPUESTA DE INVESTIGACION',
       'HORAS SEMESTRE',
     ],
@@ -282,6 +282,16 @@ export function mapearColumna(nombreOriginal: string): string {
  * Obtiene el valor de una columna específica de un item
  */
 export function obtenerValorColumna(item: Record<string, any>, columna: string): any {
+  // Caso especial para investigación: si se pide "CODIGO" pero solo existe "APROBADO POR",
+  // usar el valor de "APROBADO POR" para llenar la columna CODIGO en la tabla.
+  if (
+    columna === 'CODIGO' &&
+    item['CODIGO'] === undefined &&
+    item['APROBADO POR'] !== undefined
+  ) {
+    return item['APROBADO POR'];
+  }
+
   // Buscar coincidencia exacta primero
   if (item[columna] !== undefined) {
     return item[columna];
