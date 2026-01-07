@@ -301,20 +301,22 @@ class PeriodManager:
         logger.info(f"Preparando hoja para período: {period}")
         
         # Headers especificados (13 columnas)
+        #No están, Porcentaje horas, Detalle actividad, Cargo y departamento
+        #Porcentaje horas no se necesita, Detalle actividad es lom mismo que nombre actividad, cargo es lo mismo que vincuclacion
         headers = [
-            'cedula',
-            'nombre profesor',
-            'escuela',
-            'departamento',
-            'tipo actividad',
-            'categoría',
-            'nombre actividad',
-            'número de horas',
-            'periodo',
-            'actividad',
-            'vinculación',
-            'dedicación',
-            'nivel'
+            'Cedula',
+            'Nombre Profesor',
+            'Escuela',
+            'Departamento',
+            'Tipo de Actividad',
+            'Categoría',
+            'Nombre de actividad',
+            'Número de horas',
+            'Período',
+            'Actividad',
+            'Vinculación',
+            'Dedicación',
+            'Nivel'
         ]
         
         # Obtener o crear conexión a la hoja de cálculo
