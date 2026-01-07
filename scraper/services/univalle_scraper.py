@@ -1190,152 +1190,106 @@ class UnivalleScraper:
     
     def _extraer_datos_personales_con_soup(self, html: str, info: InformacionPersonal) -> None:
         """
-        Extrae datos personales usando BeautifulSoup.
-        Basado en cómo lo hace web/ en personal-info.ts
-        
-        Args:
-            html: HTML completo del portal
-            info: Objeto InformacionPersonal a actualizar
+        Extrae datos personales usando BeautifulSoup, mapeando por encabezado y validando alineación.
         """
         try:
             soup = BeautifulSoup(html, 'html.parser')
-            
-            # Buscar todas las tablas
             tablas = soup.find_all('table')
-            
             for tabla in tablas:
                 filas = tabla.find_all('tr')
                 if len(filas) < 2:
                     continue
-                
-                # Verificar si es tabla de datos personales
-                primera_fila_texto = filas[0].get_text(strip=True).upper()
-                if 'CEDULA' not in primera_fila_texto and 'APELLIDO' not in primera_fila_texto:
+                # Detectar si la primera fila tiene los headers relevantes
+                headers_fila1 = [c.get_text(strip=True).upper() for c in filas[0].find_all(['td', 'th'])]
+                if not any(h in headers_fila1 for h in ['CEDULA', 'DOCUMENTO', '1 APELLIDO', '2 APELLIDO', 'NOMBRE', 'UNIDAD ACADEMICA']):
                     continue
-                
                 logger.debug("Tabla de datos personales encontrada con BeautifulSoup")
-                
-                # Procesar fila 2 (índice 1): CEDULA, APELLIDOS, NOMBRE, UNIDAD, DEPARTAMENTO
-                if len(filas) > 1:
-                    fila2 = filas[1]
-                    celdas_fila2 = fila2.find_all(['td', 'th'])
-                    
-                    for i, celda in enumerate(celdas_fila2):
-                        texto = celda.get_text(strip=True)
-                        if not texto:
-                            continue
-                        
-                        # Buscar en headers de la primera fila
-                        if len(filas) > 0:
-                            headers_fila1 = filas[0].find_all(['td', 'th'])
-                            if i < len(headers_fila1):
-                                header_texto = headers_fila1[i].get_text(strip=True).upper()
-                                
-                                if 'CEDULA' in header_texto or 'DOCUMENTO' in header_texto:
-                                    if not info.cedula:
-                                        info.cedula = texto
-                                elif '1 APELLIDO' in header_texto or header_texto == 'APELLIDO1':
-                                    if not info.apellido1:
-                                        info.apellido1 = texto
-                                elif '2 APELLIDO' in header_texto or header_texto == 'APELLIDO2':
-                                    if not info.apellido2:
-                                        info.apellido2 = texto
-                                elif header_texto == 'NOMBRE':
-                                    if not info.nombre:
-                                        info.nombre = texto
-                                elif 'UNIDAD' in header_texto and 'ACADEMICA' in header_texto:
-                                    if not info.unidad_academica:
-                                        info.unidad_academica = texto
-                                        logger.debug(f"UNIDAD ACADEMICA encontrada: '{texto}'")
-                                elif 'ESCUELA' in header_texto:
-                                    if not info.escuela:
-                                        info.escuela = texto
-                                        logger.debug(f"ESCUELA encontrada: '{texto}'")
-                                elif 'DEPARTAMENTO' in header_texto or 'DPTO' in header_texto:
-                                    if not info.departamento:
-                                        info.departamento = texto
-                                        logger.info(f"✓ DEPARTAMENTO encontrado: '{texto}'")
-                                elif 'CARGO' in header_texto:
-                                    if not info.cargo:
-                                        info.cargo = texto
-                                        logger.info(f"✓ CARGO encontrado: '{texto}'")
-                        
-                        # Fallback: buscar por posición (columna 4 según análisis)
-                        if i == 4 and not info.departamento:
-                            if 'DEPARTAMENTO' in texto.upper() or 'DPTO' in texto.upper():
-                                info.departamento = texto
-                                logger.debug(f"DEPARTAMENTO encontrado por posición con BeautifulSoup: '{texto}'")
-                
-                # Procesar fila 4 (índice 3): VINCULACION, CATEGORIA, DEDICACION, NIVEL, CENTRO COSTO
+                # Procesar fila 2 (valores)
+                fila2 = filas[1]
+                valores_fila2 = [c.get_text(strip=True) for c in fila2.find_all(['td', 'th'])]
+                # Validar alineación
+                if len(headers_fila1) != len(valores_fila2):
+                    logger.warning(f"Desalineación entre headers y valores en datos personales: headers={len(headers_fila1)}, valores={len(valores_fila2)}")
+                # Mapear por encabezado
+                for i, header in enumerate(headers_fila1):
+                    valor = valores_fila2[i] if i < len(valores_fila2) else ''
+                    if not valor:
+                        continue
+                    if 'CEDULA' in header or 'DOCUMENTO' in header:
+                        if not info.cedula and valor.isdigit():
+                            info.cedula = valor
+                    elif '1 APELLIDO' in header or header == 'APELLIDO1':
+                        if not info.apellido1:
+                            info.apellido1 = valor
+                    elif '2 APELLIDO' in header or header == 'APELLIDO2':
+                        if not info.apellido2:
+                            info.apellido2 = valor
+                    elif header == 'NOMBRE':
+                        if not info.nombre and valor.isalpha():
+                            info.nombre = valor
+                    elif 'UNIDAD' in header and 'ACADEMICA' in header:
+                        if not info.unidad_academica:
+                            info.unidad_academica = valor
+                    elif 'ESCUELA' in header:
+                        if not info.escuela:
+                            info.escuela = valor
+                    elif 'DEPARTAMENTO' in header or 'DPTO' in header:
+                        if not info.departamento:
+                            info.departamento = valor
+                    elif 'CARGO' in header:
+                        if not info.cargo:
+                            info.cargo = valor
+                # Procesar fila 4 si existe (vinculación, categoría, etc.)
                 if len(filas) > 3:
-                    fila4 = filas[3]
-                    celdas_fila4 = fila4.find_all(['td', 'th'])
-                    
-                    # Buscar headers de fila 3 (índice 2) si existen
-                    headers_fila3 = []
-                    if len(filas) > 2:
-                        headers_fila3 = filas[2].find_all(['td', 'th'])
-                    
-                    for i, celda in enumerate(celdas_fila4):
-                        texto = celda.get_text(strip=True)
-                        if not texto:
+                    headers_fila3 = [c.get_text(strip=True).upper() for c in filas[2].find_all(['td', 'th'])]
+                    valores_fila4 = [c.get_text(strip=True) for c in filas[3].find_all(['td', 'th'])]
+                    for i, header in enumerate(headers_fila3):
+                        valor = valores_fila4[i] if i < len(valores_fila4) else ''
+                        if not valor:
                             continue
-                        
-                        if i < len(headers_fila3):
-                            header_texto = headers_fila3[i].get_text(strip=True).upper()
-                            
-                            if 'VINCULACION' in header_texto or 'VINCULACIÓN' in header_texto:
-                                if not info.vinculacion:
-                                    info.vinculacion = texto
-                            elif 'CATEGORIA' in header_texto or 'CATEGORÍA' in header_texto:
-                                if not info.categoria:
-                                    info.categoria = texto
-                            elif 'DEDICACION' in header_texto or 'DEDICACIÓN' in header_texto:
-                                if not info.dedicacion:
-                                    info.dedicacion = texto
-                            elif 'NIVEL' in header_texto and 'ALCANZADO' in header_texto:
-                                if not info.nivel_alcanzado:
-                                    info.nivel_alcanzado = texto
-                            elif 'CENTRO' in header_texto and 'COSTO' in header_texto:
-                                if not info.centro_costo:
-                                    info.centro_costo = texto
-                            elif 'CARGO' in header_texto:
-                                if not info.cargo:
-                                    info.cargo = texto
-                                    logger.info(f"✓ CARGO encontrado en fila 4: '{texto}'")
-                            elif 'DEPARTAMENTO' in header_texto or 'DPTO' in header_texto:
-                                if not info.departamento:
-                                    info.departamento = texto
-                                    logger.info(f"✓ DEPARTAMENTO encontrado en fila 4: '{texto}'")
-                            elif 'ESCUELA' in header_texto:
-                                if not info.escuela:
-                                    info.escuela = texto
-                                    logger.debug(f"ESCUELA encontrada en fila 4: '{texto}'")
-                
-                # Buscar cargo y departamento en filas adicionales (formato campo=valor)
+                        if 'VINCULACION' in header or 'VINCULACIÓN' in header:
+                            if not info.vinculacion:
+                                info.vinculacion = valor
+                        elif 'CATEGORIA' in header or 'CATEGORÍA' in header:
+                            if not info.categoria:
+                                info.categoria = valor
+                        elif 'DEDICACION' in header or 'DEDICACIÓN' in header:
+                            if not info.dedicacion:
+                                info.dedicacion = valor
+                        elif 'NIVEL' in header and 'ALCANZADO' in header:
+                            if not info.nivel_alcanzado:
+                                info.nivel_alcanzado = valor
+                        elif 'CENTRO' in header and 'COSTO' in header:
+                            if not info.centro_costo:
+                                info.centro_costo = valor
+                        elif 'CARGO' in header:
+                            if not info.cargo:
+                                info.cargo = valor
+                        elif 'DEPARTAMENTO' in header or 'DPTO' in header:
+                            if not info.departamento:
+                                info.departamento = valor
+                        elif 'ESCUELA' in header:
+                            if not info.escuela:
+                                info.escuela = valor
+                # Buscar en filas adicionales (campo=valor)
                 for i in range(4, min(len(filas), 10)):
                     fila = filas[i]
                     celdas = fila.find_all(['td', 'th'])
-                    
                     if len(celdas) >= 2:
                         for j in range(len(celdas) - 1):
                             campo = celdas[j].get_text(strip=True).upper()
                             valor = celdas[j + 1].get_text(strip=True)
-                            
+                            if not valor:
+                                continue
                             if 'CARGO' in campo and not info.cargo:
                                 info.cargo = valor
-                                logger.info(f"✓ CARGO encontrado en fila adicional {i+1}: '{valor}'")
                             elif ('DEPARTAMENTO' in campo or 'DPTO' in campo) and not info.departamento:
                                 info.departamento = valor
-                                logger.info(f"✓ DEPARTAMENTO encontrado en fila adicional {i+1}: '{valor}'")
                             elif 'ESCUELA' in campo and not info.escuela:
                                 info.escuela = valor
-                                logger.debug(f"ESCUELA encontrada en fila adicional {i+1}: '{valor}'")
-                
-                # Si encontramos datos en esta tabla, podemos salir
+                # Si encontramos datos clave, salir
                 if info.cedula or info.nombre:
                     break
-                    
         except Exception as e:
             logger.warning(f"Error al extraer datos personales con BeautifulSoup: {e}")
             # Continuar con método regex como fallback
