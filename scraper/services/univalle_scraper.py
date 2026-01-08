@@ -2732,6 +2732,7 @@ class UnivalleScraper:
         
         # Parsear horas a número
         horas_numero = parsear_horas(numero_horas)
+        horas_texto_entero = str(int(horas_numero))
         
         # Limpiar escuela y departamento
         escuela_limpia = limpiar_escuela(escuela)
@@ -2746,7 +2747,7 @@ class UnivalleScraper:
             'tipo_actividad': str(tipo_actividad),
             'categoria': str(categoria),
             'nombre_actividad': nombre_actividad_limpio,
-            'numero_horas': horas_numero,
+            'numero_horas': horas_texto_entero,
             'periodo': str(periodo),
             'actividad': str(actividad),
             'vinculacion': str(vinculacion),
