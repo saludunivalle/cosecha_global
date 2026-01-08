@@ -185,9 +185,17 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # CRÍTICO: Decodificar como ISO-8859-1
-            response.encoding = 'iso-8859-1'
-            html = response.text
+            # Probar decodificación automática primero
+            if response.encoding and response.encoding.lower() not in ['iso-8859-1', 'latin-1']:
+                # El servidor indicó una codificación, usarla
+                html = response.text
+            else:
+                # Probar UTF-8 primero (común en sistemas modernos)
+                try:
+                    html = response.content.decode('utf-8')
+                except UnicodeDecodeError:
+                    # Fallback a ISO-8859-1 si UTF-8 falla
+                    html = response.content.decode('iso-8859-1')
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
@@ -2043,8 +2051,12 @@ class UnivalleScraper:
                 timeout=REQUEST_TIMEOUT
             )
             response.raise_for_status()
-            response.encoding = 'iso-8859-1'
-            html = response.text
+            
+            # Probar UTF-8 primero, fallback a ISO-8859-1
+            try:
+                html = response.content.decode('utf-8')
+            except UnicodeDecodeError:
+                html = response.content.decode('iso-8859-1')
             
             # Buscar options en select
             pattern = r'<option[^>]*value=["\']?(\d+)["\']?[^>]*>([\s\S]*?)</option>'
@@ -2159,9 +2171,11 @@ class UnivalleScraper:
                 
                 response.raise_for_status()
                 
-                # Decodificar HTML
-                response.encoding = 'iso-8859-1'
-                html = response.text
+                # Decodificar HTML - probar UTF-8 primero
+                try:
+                    html = response.content.decode('utf-8')
+                except UnicodeDecodeError:
+                    html = response.content.decode('iso-8859-1')
                 logger.info(f"📄 HTML recibido: {len(html)} caracteres")
                 
                 # Validar que no esté vacío
