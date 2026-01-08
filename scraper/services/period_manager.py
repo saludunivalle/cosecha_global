@@ -312,11 +312,16 @@ class PeriodManager:
             'Categoría',
             'Nombre de actividad',
             'Número de horas',
+            #id
             'Período',
+            #Porcentaje horas,
+            #Detalle actividad, Sí se necesita 4 y 3 de dicciembre, tambien hay algo del cargo
             'Actividad',
             'Vinculación',
             'Dedicación',
             'Nivel'
+            #Cargo, Sí se necesita
+            #departamento, Sí se nececsita
         ]
         
         # Obtener o crear conexión a la hoja de cálculo

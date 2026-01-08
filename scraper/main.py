@@ -393,7 +393,7 @@ def escribir_actividades_en_hojas(
                     actividad.get('tipo_actividad', ''),      # 5. Tipo Actividad
                     actividad.get('categoria', ''),           # 6. Categoría
                     actividad.get('nombre_actividad', ''),    # 7. Nombre Actividad
-                    horas_semestre,                           # 8. Número de Horas
+                    str(int(horas_semestre)),                 # 8. Número de Horas (texto entero)
                     periodo_valor,                            # 9. Periodo
                     actividad.get('actividad', ''),           # 10. Actividad
                     actividad.get('vinculacion', ''),         # 11. Vinculación
