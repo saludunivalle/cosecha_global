@@ -262,22 +262,13 @@ class UnivalleScraper:
     
     def extraer_texto_de_celda(self, celda_html: str) -> str:
         """Extrae texto limpio de una celda."""
+        import html as html_module
+        
+        # Remover tags HTML
         texto = re.sub(r'<[^>]+>', '', celda_html)
         
-        # Decodificar entidades HTML comunes
-        entidades = {
-            '&aacute;': 'á', '&Aacute;': 'Á',
-            '&eacute;': 'é', '&Eacute;': 'É',
-            '&iacute;': 'í', '&Iacute;': 'Í',
-            '&oacute;': 'ó', '&Oacute;': 'Ó',
-            '&uacute;': 'ú', '&Uacute;': 'Ú',
-            '&ntilde;': 'ñ', '&Ntilde;': 'Ñ',
-            '&amp;': '&', '&quot;': '"',
-            '&lt;': '<', '&gt;': '>', '&nbsp;': ' ',
-        }
-        
-        for entidad, caracter in entidades.items():
-            texto = texto.replace(entidad, caracter)
+        # Decodificar todas las entidades HTML automáticamente (maneja Á, É, Í, Ó, Ú, etc.)
+        texto = html_module.unescape(texto)
         
         return normalizar_texto(texto)
     
