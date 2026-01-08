@@ -1228,7 +1228,7 @@ class UnivalleScraper:
                     elif header == 'NOMBRE':
                         # Permitir nombres con espacios, tildes, guiones, etc. Solo descartar si está vacío o es solo números
                         #if not info.nombre and valor.isalpha():
-                        if not info.nombre and valor and not valor.isdigit() and len(valor) > 1:
+                        if not info.nombre and valor.isalpha():
                             info.nombre = valor
                     elif 'UNIDAD' in header and 'ACADEMICA' in header:
                         if not info.unidad_academica:
