@@ -1227,6 +1227,7 @@ class UnivalleScraper:
                             info.apellido2 = valor
                     elif header == 'NOMBRE':
                         # Permitir nombres con espacios, tildes, guiones, etc. Solo descartar si está vacío o es solo números
+                        #if not info.nombre and valor.isalpha():
                         if not info.nombre and valor and not valor.isdigit() and len(valor) > 1:
                             info.nombre = valor
                     elif 'UNIDAD' in header and 'ACADEMICA' in header:
@@ -1295,35 +1296,6 @@ class UnivalleScraper:
         except Exception as e:
             logger.warning(f"Error al extraer datos personales con BeautifulSoup: {e}")
             # Continuar con método regex como fallback
-
-        # --- Mejora de robustez: buscar nombre en HTML plano si no se extrajo ---
-        if not info.nombre or not info.apellido1:
-            # Buscar patrones típicos de nombre completo en el HTML plano
-            # Ejemplo: NOMBRE: JUAN PEREZ LOPEZ, DOCENTE: MARIA GARCIA
-            html_norm = html.replace('\n', ' ').replace('&nbsp;', ' ')
-            html_norm = re.sub(r'\s+', ' ', html_norm)
-            patrones = [
-                r'NOMBRE\s*[:=]\s*([A-ZÁÉÍÓÚÑ ]{5,})',
-                r'DOCENTE\s*[:=]\s*([A-ZÁÉÍÓÚÑ ]{5,})',
-                r'PROFESOR\s*[:=]\s*([A-ZÁÉÍÓÚÑ ]{5,})',
-            ]
-            for regex in patrones:
-                match = re.search(regex, html_norm, re.IGNORECASE)
-                if match:
-                    nombre_completo = match.group(1).strip()
-                    # Intentar separar en nombre y apellidos si es posible
-                    partes = nombre_completo.split()
-                    if len(partes) >= 3:
-                        info.nombre = partes[0]
-                        info.apellido1 = partes[1]
-                        info.apellido2 = ' '.join(partes[2:])
-                    elif len(partes) == 2:
-                        info.nombre = partes[0]
-                        info.apellido1 = partes[1]
-                    else:
-                        info.nombre = nombre_completo
-                    logger.debug(f"Nombre extraído por regex en HTML plano: {nombre_completo}")
-                    break
     
     def _procesar_informacion_personal(
         self,
