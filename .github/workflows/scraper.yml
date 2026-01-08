@@ -7,20 +7,6 @@ on:
     - cron: '0 7 * * *'
     # 2:45 AM - Período 2025-2  
     - cron: '45 7 * * *'
-    # 3:30 AM - Período 2025-1
-    - cron: '30 8 * * *'
-    # 4:15 AM - Período 2024-2
-    - cron: '15 9 * * *'
-    # 5:00 AM - Período 2024-1
-    - cron: '0 10 * * *'
-    # 5:45 AM - Período 2023-2
-    - cron: '45 10 * * *'
-    # 6:30 AM - Período 2023-1
-    - cron: '30 11 * * *'
-    # 7:15 AM - Período 2022-2
-    - cron: '15 12 * * *'
-    # 8:00 AM - Período 2022-1
-    - cron: '0 13 * * *'
   
   # Permite ejecución manual desde GitHub Actions UI
   workflow_dispatch:
@@ -169,40 +155,25 @@ jobs:
           else
             # En modo automático (cron), determinar período por horario
             HOUR=$(date -u +%H)
-            case "$HOUR" in
-              7)  PERIOD="2026-1" ;;
-              8)  PERIOD="2025-2" ;;
-              9)  PERIOD="2024-2" ;;
-              10) PERIOD="2024-1" ;;
-              11) PERIOD="2023-2" ;;
-              12) PERIOD="2022-2" ;;
-              13) PERIOD="2022-1" ;;
-              *)  
-                # Para otros horarios, determinar por minuto también
-                MINUTE=$(date -u +%M)
-                if [ "$HOUR" -eq 7 ] && [ "$MINUTE" -ge 45 ]; then
-                  PERIOD="2025-2"
-                elif [ "$HOUR" -eq 8 ] && [ "$MINUTE" -ge 30 ]; then
-                  PERIOD="2025-1"
-                elif [ "$HOUR" -eq 9 ] && [ "$MINUTE" -ge 15 ]; then
-                  PERIOD="2024-2"
-                elif [ "$HOUR" -eq 10 ] && [ "$MINUTE" -ge 45 ]; then
-                  PERIOD="2023-2"
-                elif [ "$HOUR" -eq 11 ] && [ "$MINUTE" -ge 30 ]; then
-                  PERIOD="2023-1"
-                elif [ "$HOUR" -eq 12 ] && [ "$MINUTE" -ge 15 ]; then
-                  PERIOD="2022-2"
-                else
-                  PERIOD="2026-1"
-                fi
-                ;;
-            esac
-            echo "📋 Modo automático: procesando período $PERIOD (hora UTC: $HOUR)"
+            MINUTE=$(date -u +%M)
+      
+           if [ "$HOUR" -eq 7 ]; then
+             if [ "$MINUTE" -lt 45 ]; then
+               PERIOD="2026-1"
+             else
+               PERIOD="2025-2"
+             fi
+           else
+            # Por defecto, usar 2026-1
+             PERIOD="2026-1"
+           fi
+      
+           echo "📋 Modo automático: procesando período $PERIOD (hora UTC: $HOUR:$MINUTE)"
           fi
-          
+    
           echo "period=$PERIOD" >> $GITHUB_OUTPUT
           echo "✓ Período seleccionado: $PERIOD"
-      
+       
       - name: Run scraper for single period
         working-directory: ./scraper
         timeout-minutes: 38  # Dejar 2 minutos para cleanup
