@@ -185,37 +185,27 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # El servidor de Univalle envía UTF-8 pero con header ISO-8859-1
-            # Esto causa doble codificación: bytes UTF-8 → chars ISO-8859-1 → texto corrupto
-            # Solución: decodificar como ISO-8859-1, detectar corrupción, corregir a UTF-8
+            # El servidor de Univalle envía UTF-8 pero etiqueta mal el encoding
+            # Solución: ignorar el header e intentar UTF-8 directo sobre los bytes
+            html = None
             
-            # Paso 1: Decodificar como dice el servidor (ISO-8859-1/Latin-1)
-            html_latin = response.content.decode('latin-1', errors='replace')
-            
-            # Paso 2: Detectar si hay patrón de doble codificación
-            # Patrones típicos de UTF-8 mal interpretado como Latin-1:
-            # - "Í" (U+00CD U+0081) en lugar de "Í" (U+00CD)
-            # - "Á" (U+00C3 U+0081) en lugar de "Á" (U+00C1)
-            # - "É" (U+00C3 U+0089) en lugar de "É" (U+00C9)
-            # - "Ó" (U+00C3 U+0093) en lugar de "Ó" (U+00D3)
-            tiene_doble_codificacion = any([
-                'Á' in html_latin,  # Í mal decodificado
-                'Á' in html_latin,  # Á mal decodificado
-                'Ã' in html_latin,  # Patrones de UTF-8 mal interpretado
-            ])
-            
-            if tiene_doble_codificacion:
-                # Corregir: re-codificar a latin-1 (obtener bytes originales) y decodificar como UTF-8
+            # Intento 1: UTF-8 directo (lo correcto)
+            try:
+                html = response.content.decode('utf-8', errors='strict')
+                logger.debug("✓ HTML decodificado como UTF-8 directo")
+            except UnicodeDecodeError:
+                logger.debug("⚠️ UTF-8 directo falló, intentando corrección de doble codificación")
+                
+                # Intento 2: Corregir doble codificación (servidor envía UTF-8 etiquetado como latin-1)
                 try:
-                    html = html_latin.encode('latin-1', errors='ignore').decode('utf-8', errors='replace')
-                    logger.debug("✓ Doble codificación detectada y corregida (latin-1 → UTF-8)")
-                except (UnicodeDecodeError, UnicodeEncodeError) as e:
-                    logger.warning(f"⚠️ Error al corregir doble codificación: {e}, usando latin-1")
-                    html = html_latin
-            else:
-                # No hay doble codificación, usar como está
-                html = html_latin
-                logger.debug("✓ HTML decodificado como latin-1 (sin doble codificación)")
+                    # Leer como latin-1 (siempre funciona) y luego re-codificar a UTF-8
+                    html_latin = response.content.decode('latin-1')
+                    html = html_latin.encode('latin-1').decode('utf-8', errors='strict')
+                    logger.debug("✓ Doble codificación corregida (latin-1 → bytes → UTF-8)")
+                except (UnicodeDecodeError, UnicodeEncodeError):
+                    logger.debug("⚠️ Corrección de doble codificación falló, usando latin-1 puro")
+                    # Intento 3: Latin-1 puro (fallback)
+                    html = response.content.decode('latin-1', errors='replace')
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
