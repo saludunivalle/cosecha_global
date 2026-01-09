@@ -9,6 +9,7 @@ import ActivityTable from '../../ActivityTable';
 import { useCollapsibleState } from '../hooks/useCollapsibleState';
 import { tieneDocencia, tieneAlgunaActividad } from '../utils/activity-helpers';
 import type { DatosDocente } from '@/shared/types/docente.types';
+import { calcularTotalHoras } from '../utils/hours-calculator';
 
 interface ActividadesPorPeriodoProps {
   datos: DatosDocente;
@@ -92,7 +93,11 @@ export default React.memo(function ActividadesPorPeriodo({
   const algunaActividad = useMemo(() => tieneAlgunaActividad(datos), [datos]);
 
   const actividadesDocencia = datos.actividadesDocencia || {};
-
+  const totalHorasDocencia = calcularTotalHoras([
+    ...(actividadesDocencia.pregrado || []),
+    ...(actividadesDocencia.postgrado || []),
+    ...(actividadesDocencia.direccionTesis || []),
+  ])
   return (
     <>
       {/* ACTIVIDADES DE DOCENCIA */}
@@ -101,6 +106,7 @@ export default React.memo(function ActividadesPorPeriodo({
           titulo="ACTIVIDADES DE DOCENCIA"
           collapsed={docenciaState.collapsed}
           onToggle={docenciaState.toggle}
+          totalHoras={totalHorasDocencia}
         >
           {actividadesDocencia.pregrado?.length > 0 && (
             <SubCategorySection
@@ -134,13 +140,14 @@ export default React.memo(function ActividadesPorPeriodo({
         }
 
         const estado = estadosCategorias[categoria.key];
-
+        const totalHorasCategoria = calcularTotalHoras(actividades);
         return (
           <CategorySection
             key={categoria.key}
             titulo={categoria.titulo}
             collapsed={estado.collapsed}
             onToggle={estado.toggle}
+            totalHoras={totalHorasCategoria}
           >
             <ActivityTable
               actividades={actividades}

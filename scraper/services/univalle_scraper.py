@@ -1208,6 +1208,19 @@ class UnivalleScraper:
                 # Procesar fila 2 (valores)
                 fila2 = filas[1]
                 valores_fila2 = [c.get_text(strip=True) for c in fila2.find_all(['td', 'th'])]
+                
+                # LOG: Ver headers y valores de fila 2
+                logger.info(f"📋 FILA 2 - Headers: {headers_fila1}")
+                logger.info(f"📋 FILA 2 - Valores: {valores_fila2}")
+                
+                # Detectar CARGO en headers de fila 2 (puede ser AUXILIAR, ASISTENTE, ASOCIADO, NOMBRADO, TITULAR)
+                cargos_posibles = ['AUXILIAR', 'ASISTENTE', 'ASOCIADO', 'NOMBRADO', 'TITULAR']
+                for cargo in cargos_posibles:
+                    if cargo in headers_fila1 and not info.cargo:
+                        info.cargo = cargo
+                        logger.info(f"✅ CARGO detectado en headers fila 2: {cargo}")
+                        break
+                
                 # Validar alineación
                 if len(headers_fila1) != len(valores_fila2):
                     logger.warning(f"Desalineación entre headers y valores en datos personales: headers={len(headers_fila1)}, valores={len(valores_fila2)}")
@@ -1242,10 +1255,16 @@ class UnivalleScraper:
                     elif 'CARGO' in header:
                         if not info.cargo:
                             info.cargo = valor
+                            logger.info(f"CARGO encontrado en fila 2, columna {i}: '{valor}'")
                 # Procesar fila 4 si existe (vinculación, categoría, etc.)
                 if len(filas) > 3:
                     headers_fila3 = [c.get_text(strip=True).upper() for c in filas[2].find_all(['td', 'th'])]
                     valores_fila4 = [c.get_text(strip=True) for c in filas[3].find_all(['td', 'th'])]
+                    
+                    # LOG: Ver headers y valores de fila 3/4
+                    logger.info(f"📋 FILA 3 - Headers: {headers_fila3}")
+                    logger.info(f"📋 FILA 4 - Valores: {valores_fila4}")
+                    
                     for i, header in enumerate(headers_fila3):
                         valor = valores_fila4[i] if i < len(valores_fila4) else ''
                         if not valor:
@@ -2507,6 +2526,8 @@ class UnivalleScraper:
         logger.debug(f"NIVEL ALCANZADO extraído: '{nivel}'")
         logger.debug(f"VINCULACION extraída: '{vinculacion}'")
         logger.debug(f"DEDICACION extraída: '{dedicacion}'")
+        logger.debug(f"CARGO extraído: '{cargo}'")
+        logger.debug(f"CATEGORIA extraída: '{categoria_info}'")
         
         # Procesar actividades de pregrado
         logger.debug(f"Total actividades de PREGRADO: {len(datos_docente.actividades_pregrado)}")
@@ -2526,7 +2547,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades de postgrado
@@ -2547,7 +2569,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Helper para determinar categoría de investigación
@@ -2575,7 +2598,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE INVESTIGACION',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar dirección de tesis
@@ -2600,7 +2624,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades de extensión
@@ -2618,7 +2643,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE EXTENSION',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades intelectuales
@@ -2636,7 +2662,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES INTELECTUALES O ARTISTICAS',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades administrativas
@@ -2654,7 +2681,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES ADMINISTRATIVAS',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades complementarias
@@ -2672,7 +2700,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES COMPLEMENTARIAS',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar docente en comisión
@@ -2690,7 +2719,8 @@ class UnivalleScraper:
                 actividad='DOCENTE EN COMISION',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         logger.debug(f"Total actividades extraídas: {len(actividades)}")
@@ -2711,6 +2741,7 @@ class UnivalleScraper:
         vinculacion: str,
         dedicacion: str,
         nivel: str,
+        cargo: str,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -2718,7 +2749,7 @@ class UnivalleScraper:
         
         Orden: cedula, nombre profesor, escuela, departamento, tipo actividad, 
                categoría, nombre actividad, número de horas, periodo, actividad, 
-               vinculación, dedicación, nivel
+               vinculación, dedicación, nivel,cargo
         
         Returns:
             Diccionario con todos los campos de la actividad
@@ -2752,8 +2783,27 @@ class UnivalleScraper:
             'vinculacion': str(vinculacion),
             'dedicacion': str(dedicacion),
             'nivel': str(nivel) if nivel else '',
+            'cargo': str(cargo) if cargo else '',
             **kwargs
         }
+        
+        # LOG: Ver todos los valores extraídos
+        logger.info(f"📊 ACTIVIDAD EXTRAÍDA:")
+        logger.info(f"  1. Cédula: {actividad_dict['cedula']}")
+        logger.info(f"  2. Nombre Profesor: {actividad_dict['nombre_profesor']}")
+        logger.info(f"  3. Escuela: {actividad_dict['escuela']}")
+        logger.info(f"  4. Departamento: {actividad_dict['departamento']}")
+        logger.info(f"  5. Tipo Actividad: {actividad_dict['tipo_actividad']}")
+        logger.info(f"  6. Categoría: {actividad_dict['categoria']}")
+        logger.info(f"  7. Nombre Actividad: {actividad_dict['nombre_actividad']}")
+        logger.info(f"  8. Número Horas: {actividad_dict['numero_horas']}")
+        logger.info(f"  9. Período: {actividad_dict['periodo']}")
+        logger.info(f" 10. Actividad: {actividad_dict['actividad']}")
+        logger.info(f" 11. Vinculación: {actividad_dict['vinculacion']}")
+        logger.info(f" 12. Dedicación: {actividad_dict['dedicacion']}")
+        logger.info(f" 13. Nivel: {actividad_dict['nivel']}")
+        logger.info(f" 14. Cargo: {actividad_dict['cargo']}")
+        logger.info(actividad_dict)
         
         return actividad_dict
     
@@ -2788,6 +2838,9 @@ class UnivalleScraper:
             'NIVEL ALCANZADO': [
                 r'NIVEL\s+ALCANZADO\s*[=:]\s*([^\s,<>&"\']+)',
             ],
+            'CARGO': [
+                r'CARGO\s*[=:]\s*([^\s,<>&"\']+)',
+            ]
         }
         
         for campo, regexes in patrones.items():
@@ -2799,6 +2852,8 @@ class UnivalleScraper:
             elif campo == 'DEDICACION' and info.dedicacion:
                 continue
             elif campo == 'NIVEL ALCANZADO' and info.nivel_alcanzado:
+                continue
+            elif campo == 'CARGO' and info.cargo:    
                 continue
             
             for regex in regexes:
@@ -2814,6 +2869,8 @@ class UnivalleScraper:
                             info.dedicacion = valor
                         elif campo == 'NIVEL ALCANZADO':
                             info.nivel_alcanzado = valor
+                        elif campo == 'CARGO':
+                            info.cargo = valor    
                         logger.debug(f"Campo {campo} encontrado en texto plano: {valor}")
                         break
     
