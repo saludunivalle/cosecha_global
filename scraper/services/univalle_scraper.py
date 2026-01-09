@@ -185,10 +185,9 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # El servidor envía ISO-8859-1 (Latin-1) correctamente
-            # Este encoding maneja bien las tildes (á, é, í, ó, ú) y la ñ
-            html = response.content.decode('iso-8859-1')
-            logger.debug("✓ HTML decodificado como ISO-8859-1")
+            # El servidor envía UTF-8 (confirmado por patrón ÍA → ÁA cuando se lee como ISO-8859-1)
+            html = response.content.decode('utf-8', errors='replace')
+            logger.debug("✓ HTML decodificado como UTF-8")
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
@@ -239,8 +238,8 @@ class UnivalleScraper:
                     timeout=REQUEST_TIMEOUT,
                     headers={'Referer': base_url}
                 )
-                # Usar ISO-8859-1 para manejar tildes y ñ correctamente
-                return response.content.decode('iso-8859-1')
+                # Servidor envía UTF-8
+                return response.content.decode('utf-8', errors='replace')
             except Exception as e:
                 logger.warning(f"No se pudo obtener contenido del frame: {e}")
                 return html
@@ -2053,8 +2052,8 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # Usar ISO-8859-1 para manejar tildes y ñ correctamente
-            html = response.content.decode('iso-8859-1')
+            # Servidor envía UTF-8
+            html = response.content.decode('utf-8', errors='replace')
             
             # Buscar options en select
             pattern = r'<option[^>]*value=["\']?(\d+)["\']?[^>]*>([\s\S]*?)</option>'
