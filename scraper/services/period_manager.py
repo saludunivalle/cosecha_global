@@ -301,7 +301,7 @@ class PeriodManager:
         logger.info(f"Preparando hoja para período: {period}")
         
         # Headers especificados (13 columnas)
-        #No están, Porcentaje horas, Detalle actividad, Cargo y departamento
+        #No están, Porcentaje horas, Detalle actividad Sí se necesita 4 y 3 de dicciembre, tambien hay algo del cargo, Cargo y departamento
         #Porcentaje horas no se necesita, Detalle actividad es lom mismo que nombre actividad, cargo es lo mismo que vincuclacion
         headers = [
             'Cedula',
@@ -315,7 +315,7 @@ class PeriodManager:
             #id
             'Período',
             #Porcentaje horas,
-            #Detalle actividad, Sí se necesita 4 y 3 de dicciembre, tambien hay algo del cargo
+            'Detalle actividad', 
             'Actividad',
             'Vinculación',
             'Dedicación',
