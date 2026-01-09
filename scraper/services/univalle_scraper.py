@@ -185,27 +185,11 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # El servidor de Univalle envía UTF-8 pero etiqueta mal el encoding
-            # Solución: ignorar el header e intentar UTF-8 directo sobre los bytes
-            html = None
-            
-            # Intento 1: UTF-8 directo (lo correcto)
-            try:
-                html = response.content.decode('utf-8', errors='strict')
-                logger.debug("✓ HTML decodificado como UTF-8 directo")
-            except UnicodeDecodeError:
-                logger.debug("⚠️ UTF-8 directo falló, intentando corrección de doble codificación")
-                
-                # Intento 2: Corregir doble codificación (servidor envía UTF-8 etiquetado como latin-1)
-                try:
-                    # Leer como latin-1 (siempre funciona) y luego re-codificar a UTF-8
-                    html_latin = response.content.decode('latin-1')
-                    html = html_latin.encode('latin-1').decode('utf-8', errors='strict')
-                    logger.debug("✓ Doble codificación corregida (latin-1 → bytes → UTF-8)")
-                except (UnicodeDecodeError, UnicodeEncodeError):
-                    logger.debug("⚠️ Corrección de doble codificación falló, usando latin-1 puro")
-                    # Intento 3: Latin-1 puro (fallback)
-                    html = response.content.decode('latin-1', errors='replace')
+            # FORZAR UTF-8: Ignorar completamente el header del servidor
+            # El servidor de Univalle envía bytes UTF-8 pero con header incorrecto
+            # Solución: trabajar directamente con los bytes y forzar UTF-8
+            html = response.content.decode('utf-8', errors='replace')
+            logger.debug("✓ HTML decodificado forzando UTF-8 (ignorando header del servidor)")
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
@@ -256,8 +240,8 @@ class UnivalleScraper:
                     timeout=REQUEST_TIMEOUT,
                     headers={'Referer': base_url}
                 )
-                response.encoding = 'iso-8859-1'
-                return response.text
+                # Forzar UTF-8 (ignorar header del servidor)
+                return response.content.decode('utf-8', errors='replace')
             except Exception as e:
                 logger.warning(f"No se pudo obtener contenido del frame: {e}")
                 return html
@@ -2076,11 +2060,8 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # Probar UTF-8 primero, fallback a ISO-8859-1
-            try:
-                html = response.content.decode('utf-8')
-            except UnicodeDecodeError:
-                html = response.content.decode('iso-8859-1')
+            # Forzar UTF-8 (ignorar header del servidor)
+            html = response.content.decode('utf-8', errors='replace')
             
             # Buscar options en select
             pattern = r'<option[^>]*value=["\']?(\d+)["\']?[^>]*>([\s\S]*?)</option>'
