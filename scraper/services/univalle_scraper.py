@@ -263,27 +263,12 @@ class UnivalleScraper:
     
     def extraer_texto_de_celda(self, celda_html: str) -> str:
         """Extrae texto limpio de una celda."""
-        import html as html_module
-        
         # Remover tags HTML
         texto = re.sub(r'<[^>]+>', '', celda_html)
         
-        # Log para debug
-        if 'CIRUG' in texto.upper():
-            logger.debug(f"🔍 ANTES de unescape: {repr(texto)}")
-        
-        # Decodificar todas las entidades HTML automáticamente (maneja Á, É, Í, Ó, Ú, etc.)
-        texto = html_module.unescape(texto)
-        
-        # Log para debug
-        if 'CIRUG' in texto.upper():
-            logger.debug(f"🔍 DESPUÉS de unescape: {repr(texto)}")
-        
+        # El texto ya viene correctamente decodificado en ISO-8859-1
+        # Solo normalizar (remover espacios extra y caracteres de control)
         texto_normalizado = normalizar_texto(texto)
-        
-        # Log final
-        if 'CIRUG' in texto_normalizado.upper():
-            logger.debug(f"🔍 DESPUÉS de normalizar: {repr(texto_normalizado)}")
         
         return texto_normalizado
     
