@@ -264,26 +264,30 @@ class UnivalleScraper:
         """Extrae texto limpio de una celda."""
         import html as html_module
         
+        # DEBUG: Ver el HTML crudo de la celda
+        if 'CIRUG' in celda_html.upper() or 'MASTOLOG' in celda_html.upper():
+            logger.info(f"📄 HTML CRUDO de celda: {repr(celda_html[:200])}")
+        
         # Remover tags HTML
         texto = re.sub(r'<[^>]+>', '', celda_html)
         
         # DEBUG: Ver el texto ANTES de html.unescape
-        if 'CIRUG' in texto.upper() or 'MASTOLOG' in texto.upper() or '&Iacute;' in texto or '&iacute;' in texto:
-            logger.debug(f"📝 ANTES unescape: {repr(texto[:100])}")
+        if 'CIRUG' in texto.upper() or 'MASTOLOG' in texto.upper():
+            logger.info(f"📝 ANTES unescape: {repr(texto[:100])}")
         
         # Decodificar entidades HTML (&Iacute; → Í, &ntilde; → ñ, etc.)
         texto = html_module.unescape(texto)
         
         # DEBUG: Ver el texto DESPUÉS de html.unescape
         if 'CIRUG' in texto.upper() or 'MASTOLOG' in texto.upper():
-            logger.debug(f"📝 DESPUÉS unescape: {repr(texto[:100])}")
+            logger.info(f"📝 DESPUÉS unescape: {repr(texto[:100])}")
         
         # Normalizar (remover espacios extra y caracteres de control)
         texto_normalizado = normalizar_texto(texto)
         
         # DEBUG: Ver resultado final
         if 'CIRUG' in texto_normalizado.upper() or 'MASTOLOG' in texto_normalizado.upper():
-            logger.debug(f"✅ FINAL: {repr(texto_normalizado[:100])}")
+            logger.info(f"✅ FINAL: {repr(texto_normalizado[:100])}")
         
         return texto_normalizado
     
