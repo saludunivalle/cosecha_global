@@ -185,9 +185,10 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # El servidor envía UTF-8 (confirmado por patrón ÍA → ÁA cuando se lee como ISO-8859-1)
-            html = response.content.decode('utf-8', errors='replace')
-            logger.debug("✓ HTML decodificado como UTF-8")
+            # El servidor envía ISO-8859-1 (Latin-1)
+            # Confirmado: los caracteres especiales aparecen como bytes únicos, no como secuencias UTF-8
+            html = response.content.decode('iso-8859-1')
+            logger.debug("✓ HTML decodificado como ISO-8859-1")
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
@@ -238,8 +239,8 @@ class UnivalleScraper:
                     timeout=REQUEST_TIMEOUT,
                     headers={'Referer': base_url}
                 )
-                # Servidor envía UTF-8
-                return response.content.decode('utf-8', errors='replace')
+                # Servidor envía ISO-8859-1
+                return response.content.decode('iso-8859-1')
             except Exception as e:
                 logger.warning(f"No se pudo obtener contenido del frame: {e}")
                 return html
@@ -2063,8 +2064,8 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # Servidor envía UTF-8
-            html = response.content.decode('utf-8', errors='replace')
+            # Servidor envía ISO-8859-1
+            html = response.content.decode('iso-8859-1')
             
             # Buscar options en select
             pattern = r'<option[^>]*value=["\']?(\d+)["\']?[^>]*>([\s\S]*?)</option>'
