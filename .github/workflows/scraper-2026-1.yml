@@ -249,4 +249,3 @@ jobs:
             echo "Resumen del log:"
             grep -E "(RESUMEN FINAL|Tiempo total|Cédulas|actividades)" scraper/scraper.log | tail -10 || echo "No se encontró resumen en el log"
           fi
-

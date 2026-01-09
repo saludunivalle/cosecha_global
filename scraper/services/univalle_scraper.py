@@ -2832,4 +2832,3 @@ class UnivalleScraper:
             apellido1=info.apellido1,
             apellido2=info.apellido2
         )
-
