@@ -185,11 +185,10 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # FORZAR UTF-8: Ignorar completamente el header del servidor
-            # El servidor de Univalle envía bytes UTF-8 pero con header incorrecto
-            # Solución: trabajar directamente con los bytes y forzar UTF-8
-            html = response.content.decode('utf-8', errors='replace')
-            logger.debug("✓ HTML decodificado forzando UTF-8 (ignorando header del servidor)")
+            # El servidor envía ISO-8859-1 (Latin-1) correctamente
+            # Este encoding maneja bien las tildes (á, é, í, ó, ú) y la ñ
+            html = response.content.decode('iso-8859-1')
+            logger.debug("✓ HTML decodificado como ISO-8859-1")
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
@@ -240,8 +239,8 @@ class UnivalleScraper:
                     timeout=REQUEST_TIMEOUT,
                     headers={'Referer': base_url}
                 )
-                # Forzar UTF-8 (ignorar header del servidor)
-                return response.content.decode('utf-8', errors='replace')
+                # Usar ISO-8859-1 para manejar tildes y ñ correctamente
+                return response.content.decode('iso-8859-1')
             except Exception as e:
                 logger.warning(f"No se pudo obtener contenido del frame: {e}")
                 return html
@@ -2060,8 +2059,8 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # Forzar UTF-8 (ignorar header del servidor)
-            html = response.content.decode('utf-8', errors='replace')
+            # Usar ISO-8859-1 para manejar tildes y ñ correctamente
+            html = response.content.decode('iso-8859-1')
             
             # Buscar options en select
             pattern = r'<option[^>]*value=["\']?(\d+)["\']?[^>]*>([\s\S]*?)</option>'
