@@ -275,10 +275,24 @@ class UnivalleScraper:
         # Remover tags HTML
         texto = re.sub(r'<[^>]+>', '', celda_html)
         
+        # Log para debug
+        if 'CIRUG' in texto.upper():
+            logger.debug(f"🔍 ANTES de unescape: {repr(texto)}")
+        
         # Decodificar todas las entidades HTML automáticamente (maneja Á, É, Í, Ó, Ú, etc.)
         texto = html_module.unescape(texto)
         
-        return normalizar_texto(texto)
+        # Log para debug
+        if 'CIRUG' in texto.upper():
+            logger.debug(f"🔍 DESPUÉS de unescape: {repr(texto)}")
+        
+        texto_normalizado = normalizar_texto(texto)
+        
+        # Log final
+        if 'CIRUG' in texto_normalizado.upper():
+            logger.debug(f"🔍 DESPUÉS de normalizar: {repr(texto_normalizado)}")
+        
+        return texto_normalizado
     
     def extraer_celdas(self, fila_html: str) -> List[str]:
         """Extrae celdas de una fila, manejando colspan correctamente."""
