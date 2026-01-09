@@ -2507,6 +2507,8 @@ class UnivalleScraper:
         logger.debug(f"NIVEL ALCANZADO extraído: '{nivel}'")
         logger.debug(f"VINCULACION extraída: '{vinculacion}'")
         logger.debug(f"DEDICACION extraída: '{dedicacion}'")
+        logger.debug(f"CARGO extraído: '{cargo}'")
+        logger.debug(f"CATEGORIA extraída: '{categoria_info}'")
         
         # Procesar actividades de pregrado
         logger.debug(f"Total actividades de PREGRADO: {len(datos_docente.actividades_pregrado)}")
@@ -2526,7 +2528,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades de postgrado
@@ -2547,7 +2550,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Helper para determinar categoría de investigación
@@ -2575,7 +2579,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE INVESTIGACION',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar dirección de tesis
@@ -2600,7 +2605,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE DOCENCIA',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades de extensión
@@ -2618,7 +2624,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES DE EXTENSION',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades intelectuales
@@ -2636,7 +2643,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES INTELECTUALES O ARTISTICAS',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades administrativas
@@ -2654,7 +2662,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES ADMINISTRATIVAS',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar actividades complementarias
@@ -2672,7 +2681,8 @@ class UnivalleScraper:
                 actividad='ACTIVIDADES COMPLEMENTARIAS',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         # Procesar docente en comisión
@@ -2690,7 +2700,8 @@ class UnivalleScraper:
                 actividad='DOCENTE EN COMISION',
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
-                nivel=nivel
+                nivel=nivel,
+                cargo=cargo,
             ))
         
         logger.debug(f"Total actividades extraídas: {len(actividades)}")
@@ -2711,6 +2722,7 @@ class UnivalleScraper:
         vinculacion: str,
         dedicacion: str,
         nivel: str,
+        cargo: str,
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -2718,7 +2730,7 @@ class UnivalleScraper:
         
         Orden: cedula, nombre profesor, escuela, departamento, tipo actividad, 
                categoría, nombre actividad, número de horas, periodo, actividad, 
-               vinculación, dedicación, nivel
+               vinculación, dedicación, nivel,cargo
         
         Returns:
             Diccionario con todos los campos de la actividad
@@ -2752,8 +2764,26 @@ class UnivalleScraper:
             'vinculacion': str(vinculacion),
             'dedicacion': str(dedicacion),
             'nivel': str(nivel) if nivel else '',
+            'cargo': str(cargo) if cargo else '',
             **kwargs
         }
+        
+        # LOG: Ver todos los valores extraídos
+        logger.info(f"📊 ACTIVIDAD EXTRAÍDA:")
+        logger.info(f"  1. Cédula: {actividad_dict['cedula']}")
+        logger.info(f"  2. Nombre Profesor: {actividad_dict['nombre_profesor']}")
+        logger.info(f"  3. Escuela: {actividad_dict['escuela']}")
+        logger.info(f"  4. Departamento: {actividad_dict['departamento']}")
+        logger.info(f"  5. Tipo Actividad: {actividad_dict['tipo_actividad']}")
+        logger.info(f"  6. Categoría: {actividad_dict['categoria']}")
+        logger.info(f"  7. Nombre Actividad: {actividad_dict['nombre_actividad']}")
+        logger.info(f"  8. Número Horas: {actividad_dict['numero_horas']}")
+        logger.info(f"  9. Período: {actividad_dict['periodo']}")
+        logger.info(f" 10. Actividad: {actividad_dict['actividad']}")
+        logger.info(f" 11. Vinculación: {actividad_dict['vinculacion']}")
+        logger.info(f" 12. Dedicación: {actividad_dict['dedicacion']}")
+        logger.info(f" 13. Nivel: {actividad_dict['nivel']}")
+        logger.info(f" 14. Cargo: {actividad_dict['cargo']}")
         
         return actividad_dict
     
@@ -2788,6 +2818,9 @@ class UnivalleScraper:
             'NIVEL ALCANZADO': [
                 r'NIVEL\s+ALCANZADO\s*[=:]\s*([^\s,<>&"\']+)',
             ],
+            'CARGO': [
+                r'CARGO\s*[=:]\s*([^\s,<>&"\']+)',
+            ]
         }
         
         for campo, regexes in patrones.items():

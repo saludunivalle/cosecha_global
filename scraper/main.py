@@ -399,8 +399,8 @@ def escribir_actividades_en_hojas(
                     actividad.get('actividad', ''),           # 10. Actividad
                     actividad.get('vinculacion', ''),         # 11. Vinculación
                     actividad.get('dedicacion', ''),          # 12. Dedicación
-                    actividad.get('cargo', ''),                # 13. Cargo
                     actividad.get('nivel', ''),               # 14. Nivel
+                    actividad.get('cargo', ''),                # 13. Cargo
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
