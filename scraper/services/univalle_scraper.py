@@ -1213,6 +1213,14 @@ class UnivalleScraper:
                 logger.info(f"📋 FILA 2 - Headers: {headers_fila1}")
                 logger.info(f"📋 FILA 2 - Valores: {valores_fila2}")
                 
+                # Detectar CARGO en headers de fila 2 (puede ser AUXILIAR, ASISTENTE, ASOCIADO, NOMBRADO, TITULAR)
+                cargos_posibles = ['AUXILIAR', 'ASISTENTE', 'ASOCIADO', 'NOMBRADO', 'TITULAR']
+                for cargo in cargos_posibles:
+                    if cargo in headers_fila1 and not info.cargo:
+                        info.cargo = cargo
+                        logger.info(f"✅ CARGO detectado en headers fila 2: {cargo}")
+                        break
+                
                 # Validar alineación
                 if len(headers_fila1) != len(valores_fila2):
                     logger.warning(f"Desalineación entre headers y valores en datos personales: headers={len(headers_fila1)}, valores={len(valores_fila2)}")
