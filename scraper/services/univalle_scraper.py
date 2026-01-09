@@ -185,15 +185,9 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # El servidor envía UTF-8 pero lo recibimos como bytes
-            # Primero intentar UTF-8 directo
-            try:
-                html = response.content.decode('utf-8')
-                logger.debug("✓ HTML decodificado como UTF-8 directo")
-            except UnicodeDecodeError:
-                # Si falla, el servidor puede haber enviado ISO-8859-1
-                html = response.content.decode('iso-8859-1')
-                logger.debug("✓ HTML decodificado como ISO-8859-1 (fallback)")
+            # CRÍTICO: Decodificar como ISO-8859-1
+            response.encoding = 'iso-8859-1'
+            html = response.text
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
@@ -244,11 +238,8 @@ class UnivalleScraper:
                     timeout=REQUEST_TIMEOUT,
                     headers={'Referer': base_url}
                 )
-                # Intentar UTF-8 primero, fallback a ISO-8859-1
-                try:
-                    return response.content.decode('utf-8')
-                except UnicodeDecodeError:
-                    return response.content.decode('iso-8859-1')
+                response.encoding = 'iso-8859-1'
+                return response.text
             except Exception as e:
                 logger.warning(f"No se pudo obtener contenido del frame: {e}")
                 return html
@@ -271,34 +262,24 @@ class UnivalleScraper:
     
     def extraer_texto_de_celda(self, celda_html: str) -> str:
         """Extrae texto limpio de una celda."""
-        import html as html_module
-        
-        # DEBUG: Ver el HTML crudo de la celda
-        if 'CIRUG' in celda_html.upper() or 'MASTOLOG' in celda_html.upper():
-            logger.info(f"📄 HTML CRUDO de celda: {repr(celda_html[:200])}")
-        
-        # Remover tags HTML
         texto = re.sub(r'<[^>]+>', '', celda_html)
         
-        # DEBUG: Ver el texto ANTES de html.unescape
-        if 'CIRUG' in texto.upper() or 'MASTOLOG' in texto.upper():
-            logger.info(f"📝 ANTES unescape: {repr(texto[:100])}")
+        # Decodificar entidades HTML comunes
+        entidades = {
+            '&aacute;': 'á', '&Aacute;': 'Á',
+            '&eacute;': 'é', '&Eacute;': 'É',
+            '&iacute;': 'í', '&Iacute;': 'Í',
+            '&oacute;': 'ó', '&Oacute;': 'Ó',
+            '&uacute;': 'ú', '&Uacute;': 'Ú',
+            '&ntilde;': 'ñ', '&Ntilde;': 'Ñ',
+            '&amp;': '&', '&quot;': '"',
+            '&lt;': '<', '&gt;': '>', '&nbsp;': ' ',
+        }
         
-        # Decodificar entidades HTML (&Iacute; → Í, &ntilde; → ñ, etc.)
-        texto = html_module.unescape(texto)
+        for entidad, caracter in entidades.items():
+            texto = texto.replace(entidad, caracter)
         
-        # DEBUG: Ver el texto DESPUÉS de html.unescape
-        if 'CIRUG' in texto.upper() or 'MASTOLOG' in texto.upper():
-            logger.info(f"📝 DESPUÉS unescape: {repr(texto[:100])}")
-        
-        # Normalizar (remover espacios extra y caracteres de control)
-        texto_normalizado = normalizar_texto(texto)
-        
-        # DEBUG: Ver resultado final
-        if 'CIRUG' in texto_normalizado.upper() or 'MASTOLOG' in texto_normalizado.upper():
-            logger.info(f"✅ FINAL: {repr(texto_normalizado[:100])}")
-        
-        return texto_normalizado
+        return normalizar_texto(texto)
     
     def extraer_celdas(self, fila_html: str) -> List[str]:
         """Extrae celdas de una fila, manejando colspan correctamente."""
@@ -2071,12 +2052,8 @@ class UnivalleScraper:
                 timeout=REQUEST_TIMEOUT
             )
             response.raise_for_status()
-            
-            # Intentar UTF-8 primero, fallback a ISO-8859-1
-            try:
-                html = response.content.decode('utf-8')
-            except UnicodeDecodeError:
-                html = response.content.decode('iso-8859-1')
+            response.encoding = 'iso-8859-1'
+            html = response.text
             
             # Buscar options en select
             pattern = r'<option[^>]*value=["\']?(\d+)["\']?[^>]*>([\s\S]*?)</option>'
@@ -2191,11 +2168,9 @@ class UnivalleScraper:
                 
                 response.raise_for_status()
                 
-                # Decodificar HTML - probar UTF-8 primero
-                try:
-                    html = response.content.decode('utf-8')
-                except UnicodeDecodeError:
-                    html = response.content.decode('iso-8859-1')
+                # Decodificar HTML
+                response.encoding = 'iso-8859-1'
+                html = response.text
                 logger.info(f"📄 HTML recibido: {len(html)} caracteres")
                 
                 # Validar que no esté vacío
@@ -2857,4 +2832,3 @@ class UnivalleScraper:
             apellido1=info.apellido1,
             apellido2=info.apellido2
         )
-
