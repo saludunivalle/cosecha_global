@@ -319,8 +319,8 @@ class PeriodManager:
             'Actividad',
             'Vinculación',
             'Dedicación',
-            'Nivel'
-            #Cargo, Sí se necesita
+            'Nivel',
+            'Cargo',
             #departamento, Sí se nececsita
         ]
         

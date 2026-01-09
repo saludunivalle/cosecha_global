@@ -361,6 +361,7 @@ def escribir_actividades_en_hojas(
         'Vinculación',         # 11
         'Dedicación',          # 12
         'Nivel',               # 13
+        'Cargo'                # 14
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
@@ -398,14 +399,15 @@ def escribir_actividades_en_hojas(
                     actividad.get('actividad', ''),           # 10. Actividad
                     actividad.get('vinculacion', ''),         # 11. Vinculación
                     actividad.get('dedicacion', ''),          # 12. Dedicación
-                    actividad.get('nivel', ''),               # 13. Nivel
+                    actividad.get('cargo', ''),                # 13. Cargo
+                    actividad.get('nivel', ''),               # 14. Nivel
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
-                if len(row_data) != 13:
+                if len(row_data) != 14:
                     logger.error(
                         f"❌ Row inválido para {actividad.get('cedula', '')}: "
-                        f"tiene {len(row_data)} columnas, esperadas 13"
+                        f"tiene {len(row_data)} columnas, esperadas 14"
                     )
                     logger.error(f"   Row: {row_data}")
                     continue
