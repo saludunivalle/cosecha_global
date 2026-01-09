@@ -185,14 +185,24 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # FORZAR decodificación UTF-8 primero
+            # Intentar detectar y corregir doble codificación
+            # El servidor puede estar sirviendo UTF-8 etiquetado como ISO-8859-1
             try:
+                # Primero intentar UTF-8 directo
                 html = response.content.decode('utf-8')
                 logger.debug("✓ HTML decodificado como UTF-8")
             except UnicodeDecodeError:
-                # Fallback a ISO-8859-1 si UTF-8 falla
-                logger.debug("⚠️ UTF-8 falló, usando ISO-8859-1")
-                html = response.content.decode('iso-8859-1')
+                # Si falla, leer como latin-1 y luego intentar re-encodear a UTF-8
+                # Esto corrige el problema de doble codificación
+                try:
+                    html_latin = response.content.decode('latin-1')
+                    # Intentar re-codificar: convertir de latin-1 a bytes y luego a UTF-8
+                    html = html_latin.encode('latin-1').decode('utf-8')
+                    logger.debug("✓ HTML corregido de doble codificación (latin-1 → UTF-8)")
+                except (UnicodeDecodeError, UnicodeEncodeError):
+                    # Si todo falla, usar latin-1 tal cual
+                    html = response.content.decode('latin-1')
+                    logger.debug("⚠️ Usando latin-1 sin conversión")
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
