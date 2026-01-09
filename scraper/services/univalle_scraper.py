@@ -185,17 +185,14 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # Probar decodificación automática primero
-            if response.encoding and response.encoding.lower() not in ['iso-8859-1', 'latin-1']:
-                # El servidor indicó una codificación, usarla
-                html = response.text
-            else:
-                # Probar UTF-8 primero (común en sistemas modernos)
-                try:
-                    html = response.content.decode('utf-8')
-                except UnicodeDecodeError:
-                    # Fallback a ISO-8859-1 si UTF-8 falla
-                    html = response.content.decode('iso-8859-1')
+            # FORZAR decodificación UTF-8 primero
+            try:
+                html = response.content.decode('utf-8')
+                logger.debug("✓ HTML decodificado como UTF-8")
+            except UnicodeDecodeError:
+                # Fallback a ISO-8859-1 si UTF-8 falla
+                logger.debug("⚠️ UTF-8 falló, usando ISO-8859-1")
+                html = response.content.decode('iso-8859-1')
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
