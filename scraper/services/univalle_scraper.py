@@ -1242,6 +1242,7 @@ class UnivalleScraper:
                     elif 'CARGO' in header:
                         if not info.cargo:
                             info.cargo = valor
+                            logger.info(f"CARGO encontrado en fila 2, columna {i}: '{valor}'")
                 # Procesar fila 4 si existe (vinculación, categoría, etc.)
                 if len(filas) > 3:
                     headers_fila3 = [c.get_text(strip=True).upper() for c in filas[2].find_all(['td', 'th'])]
@@ -2784,6 +2785,7 @@ class UnivalleScraper:
         logger.info(f" 12. Dedicación: {actividad_dict['dedicacion']}")
         logger.info(f" 13. Nivel: {actividad_dict['nivel']}")
         logger.info(f" 14. Cargo: {actividad_dict['cargo']}")
+        logger.info(actividad_dict)
         
         return actividad_dict
     
@@ -2833,6 +2835,8 @@ class UnivalleScraper:
                 continue
             elif campo == 'NIVEL ALCANZADO' and info.nivel_alcanzado:
                 continue
+            elif campo == 'CARGO' and info.cargo:    
+                continue
             
             for regex in regexes:
                 match = re.search(regex, html_norm, re.IGNORECASE)
@@ -2847,6 +2851,8 @@ class UnivalleScraper:
                             info.dedicacion = valor
                         elif campo == 'NIVEL ALCANZADO':
                             info.nivel_alcanzado = valor
+                        elif campo == 'CARGO':
+                            info.cargo = valor    
                         logger.debug(f"Campo {campo} encontrado en texto plano: {valor}")
                         break
     
