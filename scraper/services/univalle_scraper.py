@@ -185,10 +185,15 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # El servidor envía ISO-8859-1 (Latin-1)
-            # Confirmado: los caracteres especiales aparecen como bytes únicos, no como secuencias UTF-8
-            html = response.content.decode('iso-8859-1')
-            logger.debug("✓ HTML decodificado como ISO-8859-1")
+            # El servidor envía UTF-8 pero lo recibimos como bytes
+            # Primero intentar UTF-8 directo
+            try:
+                html = response.content.decode('utf-8')
+                logger.debug("✓ HTML decodificado como UTF-8 directo")
+            except UnicodeDecodeError:
+                # Si falla, el servidor puede haber enviado ISO-8859-1
+                html = response.content.decode('iso-8859-1')
+                logger.debug("✓ HTML decodificado como ISO-8859-1 (fallback)")
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
@@ -239,8 +244,11 @@ class UnivalleScraper:
                     timeout=REQUEST_TIMEOUT,
                     headers={'Referer': base_url}
                 )
-                # Servidor envía ISO-8859-1
-                return response.content.decode('iso-8859-1')
+                # Intentar UTF-8 primero, fallback a ISO-8859-1
+                try:
+                    return response.content.decode('utf-8')
+                except UnicodeDecodeError:
+                    return response.content.decode('iso-8859-1')
             except Exception as e:
                 logger.warning(f"No se pudo obtener contenido del frame: {e}")
                 return html
@@ -2064,8 +2072,11 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # Servidor envía ISO-8859-1
-            html = response.content.decode('iso-8859-1')
+            # Intentar UTF-8 primero, fallback a ISO-8859-1
+            try:
+                html = response.content.decode('utf-8')
+            except UnicodeDecodeError:
+                html = response.content.decode('iso-8859-1')
             
             # Buscar options en select
             pattern = r'<option[^>]*value=["\']?(\d+)["\']?[^>]*>([\s\S]*?)</option>'
