@@ -1208,6 +1208,11 @@ class UnivalleScraper:
                 # Procesar fila 2 (valores)
                 fila2 = filas[1]
                 valores_fila2 = [c.get_text(strip=True) for c in fila2.find_all(['td', 'th'])]
+                
+                # LOG: Ver headers y valores de fila 2
+                logger.info(f"📋 FILA 2 - Headers: {headers_fila1}")
+                logger.info(f"📋 FILA 2 - Valores: {valores_fila2}")
+                
                 # Validar alineación
                 if len(headers_fila1) != len(valores_fila2):
                     logger.warning(f"Desalineación entre headers y valores en datos personales: headers={len(headers_fila1)}, valores={len(valores_fila2)}")
@@ -1247,6 +1252,11 @@ class UnivalleScraper:
                 if len(filas) > 3:
                     headers_fila3 = [c.get_text(strip=True).upper() for c in filas[2].find_all(['td', 'th'])]
                     valores_fila4 = [c.get_text(strip=True) for c in filas[3].find_all(['td', 'th'])]
+                    
+                    # LOG: Ver headers y valores de fila 3/4
+                    logger.info(f"📋 FILA 3 - Headers: {headers_fila3}")
+                    logger.info(f"📋 FILA 4 - Valores: {valores_fila4}")
+                    
                     for i, header in enumerate(headers_fila3):
                         valor = valores_fila4[i] if i < len(valores_fila4) else ''
                         if not valor:
