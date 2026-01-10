@@ -931,7 +931,7 @@ class UnivalleScraper:
         Parsea valor de horas a float de forma robusta.
         """
         if not valor:
-            return 0.0
+            return 0
         try:
             valor_limpio = str(valor).strip().replace(",", ".")
             return float(valor_limpio)
@@ -2549,6 +2549,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                tipo=actividad.tipo or '',  # Agregar el campo tipo para mapeo
             ))
         
         # Procesar actividades de postgrado
@@ -2571,6 +2572,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                tipo=actividad.tipo or '',  # Agregar el campo tipo para mapeo
             ))
         
         # Helper para determinar categoría de investigación
