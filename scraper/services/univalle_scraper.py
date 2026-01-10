@@ -2497,9 +2497,11 @@ class UnivalleScraper:
         # Extraer escuela y departamento a partir de UNIDAD ACADEMICA
         # según la lógica acordada.
         escuela = ""
-        departamento = ""
+        departamento = ""  # departamento limpio
+        departamento_original = ""  # departamento sin limpiar (tal cual del HTML)
         
         if info.unidad_academica:
+            departamento_original = info.unidad_academica  # Guardar el original
             departamento, escuela = self._extraer_escuela_departamento(info.unidad_academica)
             logger.debug(
                 f"UNIDAD ACADEMICA: '{info.unidad_academica}' -> "
@@ -2509,6 +2511,7 @@ class UnivalleScraper:
             # Fallback a los campos separados si no hay UNIDAD ACADEMICA
             escuela_raw = info.escuela or ''
             departamento_raw = info.departamento or ''
+            departamento_original = departamento_raw  # Guardar el original
             if escuela_raw:
                 escuela = limpiar_escuela(escuela_raw)
                 logger.debug(f"Escuela (fallback): '{escuela_raw}' -> '{escuela}'")
@@ -2549,6 +2552,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                departamento_original=departamento_original,
                 tipo=actividad.tipo or '',  # Agregar el campo tipo para mapeo
             ))
         
@@ -2568,6 +2572,7 @@ class UnivalleScraper:
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
+                departamento_original=departamento_original,
                 vinculacion=vinculacion,
                 dedicacion=dedicacion,
                 nivel=nivel,
@@ -2602,6 +2607,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                departamento_original=departamento_original,
             ))
         
         # Procesar dirección de tesis
@@ -2628,6 +2634,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                departamento_original=departamento_original,
             ))
         
         # Procesar actividades de extensión
@@ -2647,6 +2654,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                departamento_original=departamento_original,
             ))
         
         # Procesar actividades intelectuales
@@ -2666,6 +2674,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                departamento_original=departamento_original,
             ))
         
         # Procesar actividades administrativas
@@ -2685,6 +2694,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                departamento_original=departamento_original,
             ))
         
         # Procesar actividades complementarias
@@ -2704,6 +2714,7 @@ class UnivalleScraper:
                 dedicacion=dedicacion,
                 nivel=nivel,
                 cargo=cargo,
+                departamento_original=departamento_original,
             ))
         
         # Procesar docente en comisión
@@ -2717,6 +2728,7 @@ class UnivalleScraper:
                 categoria=actividad.get('TIPO DE COMISION', '') or actividad.get('Tipo de Comision', ''),
                 nombre_actividad=actividad.get('DESCRIPCION', '') or actividad.get('Descripcion', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
+                departamento_original=departamento_original,
                 periodo=periodo_label,
                 actividad='DOCENTE EN COMISION',
                 vinculacion=vinculacion,
@@ -2744,6 +2756,7 @@ class UnivalleScraper:
         dedicacion: str,
         nivel: str,
         cargo: str,
+        departamento_original: str = '',
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -2775,7 +2788,7 @@ class UnivalleScraper:
             'cedula': str(cedula),
             'nombre_profesor': str(nombre_profesor),
             'escuela': escuela_limpia,
-            'departamento': departamento_limpio,  # Departamento (con mayúscula) - campo 4
+            'departamento': departamento_limpio,  # Departamento (con mayúscula) - campo 4 - valor limpio
             'tipo_actividad': str(tipo_actividad),
             'categoria': str(categoria),
             'nombre_actividad': nombre_actividad_limpio,
@@ -2787,7 +2800,7 @@ class UnivalleScraper:
             'dedicacion': str(dedicacion),
             'nivel': str(nivel) if nivel else '',
             'cargo': str(cargo) if cargo else '',
-            'departamento_profesor': departamento_limpio,  # departamento (con minúscula) - el del profesor
+            'departamento_profesor': departamento_original or departamento_limpio,  # departamento (con minúscula) - valor original sin limpiar
             **kwargs
         }
         
