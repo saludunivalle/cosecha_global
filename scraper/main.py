@@ -404,15 +404,16 @@ def escribir_actividades_en_hojas(
             contador = 0
             for actividad in actividades:
                 contador += 1
-                # Asegurar que el número de horas nunca sea vacío/None y sea float
-                horas_semestre = actividad.get('numero_horas', 0.0)
+                # Asegurar que el número de horas nunca sea vacío/None y sea entero
+                horas_semestre = actividad.get('numero_horas', 0)
                 if horas_semestre in ('', None):
-                    horas_semestre = 0.0
+                    horas_semestre = 0
                 try:
-                    horas_semestre = float(horas_semestre)
+                    # Convertir a float primero para manejar decimales, luego tomar solo la parte entera
+                    horas_semestre = int(float(horas_semestre))
                 except (ValueError, TypeError):
-                    logger.warning(f"⚠️ Valor de horas_semestre no convertible a float: {horas_semestre!r}. Usando 0.0")
-                    horas_semestre = 0.0
+                    logger.warning(f"⚠️ Valor de horas_semestre no convertible a entero: {horas_semestre!r}. Usando 0")
+                    horas_semestre = 0
                 
                 # Usar periodo_label si el periodo de la actividad está vacío
                 periodo_valor = actividad.get('periodo', '') or periodo_label

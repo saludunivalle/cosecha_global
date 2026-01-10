@@ -1101,7 +1101,7 @@ class UnivalleScraper:
         
         return actividades
     
-    def _extraer_horas_semestre(self, fila_celdas) -> float:
+    def _extraer_horas_semestre(self, fila_celdas) -> int:
         """
         Extrae las horas del semestre de una fila.
         
@@ -1545,13 +1545,14 @@ class UnivalleScraper:
                     elif 'INTEN' in header_upper and not actividad.inten:
                         actividad.inten = valor
             
-            # Conversión de horas a número (más permisivo, igual que .gs)
+            # Conversión de horas a número entero (sin decimales)
             if actividad.horas_semestre and actividad.horas_semestre.strip():
                 try:
                     # Limpiar horas: remover caracteres no numéricos excepto punto
                     horas_limpia = re.sub(r'[^\d.]', '', actividad.horas_semestre)
                     if horas_limpia:
-                        horas_numero = float(horas_limpia)
+                        # Convertir a float primero, luego tomar solo la parte entera
+                        horas_numero = int(float(horas_limpia))
                         actividad.horas_semestre = str(horas_numero)
                         logger.debug(f"  ✓ Horas: {horas_numero}")
                 except (ValueError, TypeError):
