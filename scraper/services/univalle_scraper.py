@@ -2770,22 +2770,24 @@ class UnivalleScraper:
         escuela_limpia = limpiar_escuela(escuela)
         departamento_limpio = limpiar_departamento(departamento)
         
-        # Construir diccionario (13 campos en orden correcto)
+        # Construir diccionario (todos los campos en orden correcto)
         actividad_dict = {
             'cedula': str(cedula),
             'nombre_profesor': str(nombre_profesor),
             'escuela': escuela_limpia,
-            'departamento': departamento_limpio,
+            'departamento': departamento_limpio,  # Departamento (con mayúscula) - campo 4
             'tipo_actividad': str(tipo_actividad),
             'categoria': str(categoria),
             'nombre_actividad': nombre_actividad_limpio,
             'numero_horas': horas_numero,
             'periodo': str(periodo),
+            'detalle_actividad': str(tipo_actividad),  # Detalle actividad - duplicado de nombre_actividad
             'actividad': str(actividad),
             'vinculacion': str(vinculacion),
             'dedicacion': str(dedicacion),
             'nivel': str(nivel) if nivel else '',
             'cargo': str(cargo) if cargo else '',
+            'departamento_profesor': departamento_limpio,  # departamento (con minúscula) - el del profesor
             **kwargs
         }
         

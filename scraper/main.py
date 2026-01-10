@@ -375,7 +375,7 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 15 columnas en el orden correcto (incluyendo Detalle Actividad)
+    # 18 columnas en el orden correcto (según period_manager.py)
     headers = [
         'Cedula',              # 1
         'Nombre Profesor',     # 2
@@ -386,12 +386,13 @@ def escribir_actividades_en_hojas(
         'Nombre Actividad',    # 7
         'Número de Horas',     # 8
         'Periodo',             # 9
-        'Detalle Actividad',   # 10 - Nuevo campo
+        'Detalle Actividad',   # 10
         'Actividad',           # 11
         'Vinculación',         # 12
         'Dedicación',          # 13
         'Nivel',               # 14
-        'Cargo'                # 15
+        'Cargo',               # 15
+        'departamento'         # 16 - departamento del profesor (minúscula)
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
@@ -436,13 +437,14 @@ def escribir_actividades_en_hojas(
                     actividad.get('dedicacion', ''),          # 13. Dedicación
                     actividad.get('nivel', ''),               # 14. Nivel
                     actividad.get('cargo', ''),               # 15. Cargo
+                    actividad.get('departamento_profesor', actividad.get('departamento', '')),  # 16. departamento del profesor
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
-                if len(row_data) != 15:
+                if len(row_data) != 16:
                     logger.error(
                         f"❌ Row inválido para {actividad.get('cedula', '')}: "
-                        f"tiene {len(row_data)} columnas, esperadas 15"
+                        f"tiene {len(row_data)} columnas, esperadas 16"
                     )
                     logger.error(f"   Row: {row_data}")
                     continue

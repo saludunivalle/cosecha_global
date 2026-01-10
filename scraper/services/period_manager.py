@@ -321,7 +321,7 @@ class PeriodManager:
             'Dedicación',
             'Nivel',
             'Cargo',
-            #departamento, Sí se nececsita
+            'departamento'
         ]
         
         # Obtener o crear conexión a la hoja de cálculo
