@@ -219,18 +219,18 @@ def formatear_nombre_completo(
     return ' '.join(partes) if partes else 'No disponible'
 
 
-def parsear_horas(horas_str: str) -> float:
+def parsear_horas(horas_str: str) -> int:
     """
-    Parsea string de horas a float.
+    Parsea string de horas a entero (sin decimales).
     
     Args:
         horas_str: String con número de horas
         
     Returns:
-        Número de horas como float, 0.0 si no se puede parsear
+        Número de horas como entero, 0 si no se puede parsear
     """
     if not horas_str:
-        return 0.0
+        return 0
     
     # Remover espacios y caracteres no numéricos (excepto punto y coma)
     horas_limpia = re.sub(r'[^\d.,]', '', str(horas_str))
@@ -239,10 +239,11 @@ def parsear_horas(horas_str: str) -> float:
     horas_limpia = horas_limpia.replace(',', '.')
     
     try:
-        return float(horas_limpia)
+        # Convertir a float primero y luego tomar solo la parte entera
+        return int(float(horas_limpia))
     except (ValueError, TypeError):
         logger.warning(f"No se pudo parsear horas: {horas_str}")
-        return 0.0
+        return 0
 
 
 def validar_periodo_id(periodo_id: Any) -> bool:

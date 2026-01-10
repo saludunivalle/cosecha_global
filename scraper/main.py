@@ -1,7 +1,7 @@
 """
 Orquestador principal del scraper Univalle
 """
-
+#CL=Clase, PS=Practica Supervisada, MG=Clase Magistral, LB=Laboratorio, TA=Tutoria Academica, TD=Trabajo de campo, CD=Curso Dirigido, SM=Seminario, TL=Taller
 import sys
 import logging
 import argparse
@@ -311,6 +311,35 @@ def enviar_notificacion(errores_criticos: List[str], logger: logging.Logger):
     # send_slack_notification(errores_criticos)
 
 
+def mapear_tipo_actividad(codigo: str) -> str:
+    """
+    Mapea el código de tipo de actividad a su nombre completo.
+    
+    Args:
+        codigo: Código del tipo de actividad (CL, PS, MG, etc.)
+        
+    Returns:
+        Nombre completo del tipo de actividad
+    """
+    mapeo = {
+        'CL': 'Clase',
+        'PS': 'Practica Supervisada',
+        'MG': 'Clase Magistral',
+        'LB': 'Laboratorio',
+        'TA': 'Tutoria Academica',
+        'TD': 'Trabajo de campo',
+        'CD': 'Curso Dirigido',
+        'SM': 'Seminario',
+        'TL': 'Taller'
+    }
+    
+    # Limpiar y normalizar el código
+    codigo_limpio = str(codigo).strip().upper() if codigo else ''
+    
+    # Retornar el nombre completo o el código original si no se encuentra
+    return mapeo.get(codigo_limpio, codigo_limpio)
+
+
 def agrupar_actividades_por_periodo(actividades: List[Dict[str, Any]]) -> Dict[str, List[Dict[str, Any]]]:
     """
     Agrupa actividades por período.
@@ -346,7 +375,7 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 13 columnas en el orden correcto (sin Detalle Actividad)
+    # 18 columnas en el orden correcto (según period_manager.py)
     headers = [
         'Cedula',              # 1
         'Nombre Profesor',     # 2
@@ -357,11 +386,13 @@ def escribir_actividades_en_hojas(
         'Nombre Actividad',    # 7
         'Número de Horas',     # 8
         'Periodo',             # 9
-        'Actividad',           # 10
-        'Vinculación',         # 11
-        'Dedicación',          # 12
-        'Nivel',               # 13
-        'Cargo'                # 14
+        'Detalle Actividad',   # 10
+        'Actividad',           # 11
+        'Vinculación',         # 12
+        'Dedicación',          # 13
+        'Nivel',               # 14
+        'Cargo',               # 15
+        'departamento'         # 16 - departamento del profesor (minúscula)
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
@@ -373,18 +404,23 @@ def escribir_actividades_en_hojas(
             contador = 0
             for actividad in actividades:
                 contador += 1
-                # Asegurar que el número de horas nunca sea vacío/None y sea float
-                horas_semestre = actividad.get('numero_horas', 0.0)
+                # Asegurar que el número de horas nunca sea vacío/None y sea entero
+                horas_semestre = actividad.get('numero_horas', 0)
                 if horas_semestre in ('', None):
-                    horas_semestre = 0.0
+                    horas_semestre = 0
                 try:
-                    horas_semestre = float(horas_semestre)
+                    # Convertir a float primero para manejar decimales, luego tomar solo la parte entera
+                    horas_semestre = int(float(horas_semestre))
                 except (ValueError, TypeError):
-                    logger.warning(f"⚠️ Valor de horas_semestre no convertible a float: {horas_semestre!r}. Usando 0.0")
-                    horas_semestre = 0.0
+                    logger.warning(f"⚠️ Valor de horas_semestre no convertible a entero: {horas_semestre!r}. Usando 0")
+                    horas_semestre = 0
                 
                 # Usar periodo_label si el periodo de la actividad está vacío
                 periodo_valor = actividad.get('periodo', '') or periodo_label
+                
+                # Obtener el código de tipo y mapearlo a su nombre completo
+                tipo_codigo = actividad.get('tipo', '')
+                detalle_actividad = mapear_tipo_actividad(tipo_codigo)
                 
                 row_data = [
                     actividad.get('cedula', ''),              # 1. Cedula
@@ -394,20 +430,22 @@ def escribir_actividades_en_hojas(
                     actividad.get('tipo_actividad', ''),      # 5. Tipo Actividad
                     actividad.get('categoria', ''),           # 6. Categoría
                     actividad.get('nombre_actividad', ''),    # 7. Nombre Actividad
-                    horas_semestre,                 # 8. Número de Horas (texto entero)
+                    horas_semestre,                           # 8. Número de Horas
                     periodo_valor,                            # 9. Periodo
-                    actividad.get('actividad', ''),           # 10. Actividad
-                    actividad.get('vinculacion', ''),         # 11. Vinculación
-                    actividad.get('dedicacion', ''),          # 12. Dedicación
+                    detalle_actividad,                        # 10. Detalle Actividad (CL->Clase, etc.)
+                    actividad.get('actividad', ''),           # 11. Actividad
+                    actividad.get('vinculacion', ''),         # 12. Vinculación
+                    actividad.get('dedicacion', ''),          # 13. Dedicación
                     actividad.get('nivel', ''),               # 14. Nivel
-                    actividad.get('cargo', ''),                # 13. Cargo
+                    actividad.get('cargo', ''),               # 15. Cargo
+                    actividad.get('departamento_profesor', actividad.get('departamento', '')),  # 16. departamento del profesor
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
-                if len(row_data) != 14:
+                if len(row_data) != 16:
                     logger.error(
                         f"❌ Row inválido para {actividad.get('cedula', '')}: "
-                        f"tiene {len(row_data)} columnas, esperadas 14"
+                        f"tiene {len(row_data)} columnas, esperadas 16"
                     )
                     logger.error(f"   Row: {row_data}")
                     continue
