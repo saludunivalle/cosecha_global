@@ -21,7 +21,10 @@ on:
         description: 'Delay entre cédulas (segundos)'
         required: false
         default: '1.0'
-
+      max_cedulas:
+        description: 'Máximo de cédulas a procesar (vacío = todas)'
+        required: false
+        default: '30'
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -196,6 +199,7 @@ jobs:
           echo "   Período objetivo: $TARGET_PERIOD"
           echo "   Hoja fuente: ${{ inputs.source_worksheet || '2025-2' }}"
           echo "   Columna: ${{ inputs.source_column || 'D' }}"
+          echo "   Máximo de cédulas: ${{ inputs.max_cedulas || '30' }}"
           
           python main.py \
             --modo completo \
@@ -204,7 +208,8 @@ jobs:
             --target-period "$TARGET_PERIOD" \
             --source-worksheet "${{ inputs.source_worksheet || '2025-2' }}" \
             --source-column "${{ inputs.source_column || 'D' }}" \
-            --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}
+            --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }} \
+            --max-cedulas ${{ inputs.max_cedulas || '30' }}
         continue-on-error: true
         id: scrape_run
       
