@@ -1892,6 +1892,8 @@ class UnivalleScraper:
         indice_titulo = -1
         indice_cargo = -1
         indice_descripcion = -1
+        categorias_segunda_fila = []
+        inicio_datos = 1  # Por defecto, los datos empiezan en fila 1
         
         for j, header in enumerate(headers):
             header_upper = header.upper()
@@ -1920,9 +1922,30 @@ class UnivalleScraper:
             if 'DESCRIPCION' in header_upper:
                 indice_descripcion = j
         
-        logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}")
+        # Detectar si la segunda fila contiene categorías (para actividades complementarias)
+        # Esto ocurre cuando hay headers como "PARTICIPACION EN:" y la fila 1 tiene las categorías reales
+        if len(filas) > 1:
+            segunda_fila_celdas = self.extraer_celdas(filas[1])
+            # Verificar si la segunda fila contiene categorías típicas de complementarias
+            categorias_conocidas = ['CLAUSTRO', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
+                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION']
+            
+            es_fila_categorias = False
+            for celda in segunda_fila_celdas:
+                celda_upper = celda.strip().upper() if celda else ''
+                if any(cat in celda_upper for cat in categorias_conocidas):
+                    es_fila_categorias = True
+                    break
+            
+            # Si detectamos categorías en la segunda fila, usarla como categorías
+            if es_fila_categorias:
+                categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
+                inicio_datos = 2  # Los datos empiezan en la fila 2
+                logger.debug(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
         
-        for i in range(1, len(filas)):
+        logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, Inicio datos={inicio_datos}")
+        
+        for i in range(inicio_datos, len(filas)):
             celdas = self.extraer_celdas(filas[i])
             
             if all(not c or not c.strip() for c in celdas):
@@ -1937,6 +1960,25 @@ class UnivalleScraper:
                     header_norm = header.upper()
                     actividad[header] = valor
                     actividad[header_norm] = valor
+            
+            # Si hay categorías en segunda fila, asignar la categoría correspondiente
+            if categorias_segunda_fila:
+                # Buscar en qué columna hay datos para determinar la categoría
+                categoria = ''
+                for j, celda in enumerate(celdas):
+                    if celda and celda.strip() and j < len(categorias_segunda_fila):
+                        # Verificar que no sea solo el valor de horas
+                        celda_val = celda.strip()
+                        if not re.match(r'^\d+\.?\d*$', celda_val) or j == indice_nombre:
+                            # Si encontramos datos en esta columna, usar la categoría correspondiente
+                            if categorias_segunda_fila[j]:
+                                categoria = categorias_segunda_fila[j]
+                                break
+                
+                if categoria:
+                    actividad['CATEGORIA'] = categoria
+                    actividad['Categoría'] = categoria
+                    logger.debug(f"  Categoría asignada: '{categoria}'")
             
             # Extraer HORAS SEMESTRE usando índice identificado primero
             horas = ''
@@ -2021,6 +2063,11 @@ class UnivalleScraper:
             # Validar que el nombre NO sea un número
             if nombre and re.match(r'^\d+\.?\d*$', nombre):
                 logger.error(f"❌ ERROR: Nombre de actividad es un número '{nombre}' - las columnas están invertidas")
+            
+            # Asegurar que CATEGORIA esté presente (incluso si está vacía)
+            if 'CATEGORIA' not in actividad:
+                actividad['CATEGORIA'] = ''
+                actividad['Categoría'] = ''
             
             actividades.append(actividad)
         
@@ -2700,13 +2747,21 @@ class UnivalleScraper:
         
         # Procesar actividades complementarias
         for actividad in datos_docente.actividades_complementarias:
+            # Obtener categoría: primero intentar CATEGORIA (nueva lógica), 
+            # luego PARTICIPACION EN (legacy), luego vacío
+            categoria_complementaria = (
+                actividad.get('CATEGORIA', '') or 
+                actividad.get('Categoría', '') or
+                actividad.get('PARTICIPACION EN', '') or 
+                ''
+            )
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
                 tipo_actividad='Complementarias',
-                categoria=actividad.get('PARTICIPACION EN', '') or '',
+                categoria=categoria_complementaria,
                 nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
