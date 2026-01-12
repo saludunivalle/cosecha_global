@@ -2615,7 +2615,20 @@ class UnivalleScraper:
         logger.debug(f"Total actividades de PREGRADO: {len(datos_docente.actividades_pregrado)}")
         for actividad in datos_docente.actividades_pregrado:
             # Log para debug de cada actividad
-            logger.debug(f"  Pregrado - nombre_asignatura: '{actividad.nombre_asignatura}', horas_semestre: '{actividad.horas_semestre}'")
+            nombre_asig = (actividad.nombre_asignatura or '').strip()
+            logger.debug(f"  Pregrado - nombre_asignatura: '{nombre_asig}', horas_semestre: '{actividad.horas_semestre}'")
+            
+            # Filtrar actividades vacías o con títulos de sección
+            if not nombre_asig:
+                logger.debug(f"    ⚠️ Saltando actividad de pregrado sin nombre")
+                continue
+            
+            # Verificar que no sea un título de sección
+            nombre_upper = nombre_asig.upper()
+            if any(titulo in nombre_upper for titulo in ['ACTIVIDADES DE DOCENCIA', 'PREGRADO', 'POSTGRADO']):
+                logger.debug(f"    ⚠️ Saltando título de sección: '{nombre_asig}'")
+                continue
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2623,7 +2636,7 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Docencia',
                 categoria='Pregrado',
-                nombre_actividad=actividad.nombre_asignatura or '',
+                nombre_actividad=nombre_asig,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
@@ -2639,7 +2652,20 @@ class UnivalleScraper:
         logger.debug(f"Total actividades de POSTGRADO: {len(datos_docente.actividades_postgrado)}")
         for actividad in datos_docente.actividades_postgrado:
             # Log para debug de cada actividad
-            logger.debug(f"  Postgrado - nombre_asignatura: '{actividad.nombre_asignatura}', horas_semestre: '{actividad.horas_semestre}'")
+            nombre_asig = (actividad.nombre_asignatura or '').strip()
+            logger.debug(f"  Postgrado - nombre_asignatura: '{nombre_asig}', horas_semestre: '{actividad.horas_semestre}'")
+            
+            # Filtrar actividades vacías o con títulos de sección
+            if not nombre_asig:
+                logger.debug(f"    ⚠️ Saltando actividad de postgrado sin nombre")
+                continue
+            
+            # Verificar que no sea un título de sección
+            nombre_upper = nombre_asig.upper()
+            if any(titulo in nombre_upper for titulo in ['ACTIVIDADES DE DOCENCIA', 'PREGRADO', 'POSTGRADO']):
+                logger.debug(f"    ⚠️ Saltando título de sección: '{nombre_asig}'")
+                continue
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2647,7 +2673,7 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Docencia',
                 categoria='Postgrado',
-                nombre_actividad=actividad.nombre_asignatura or '',
+                nombre_actividad=nombre_asig,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
@@ -3007,8 +3033,17 @@ class UnivalleScraper:
         Returns:
             Nombre completo formateado
         """
-        return formatear_nombre_completo(
+        nombre_completo = formatear_nombre_completo(
             nombre=info.nombre,
             apellido1=info.apellido1,
             apellido2=info.apellido2
         )
+        
+        # Logging para debug si el nombre es 'No disponible'
+        if nombre_completo == 'No disponible':
+            logger.warning(
+                f"⚠️ Nombre completo 'No disponible' - "
+                f"Datos: nombre='{info.nombre}', apellido1='{info.apellido1}', apellido2='{info.apellido2}'"
+            )
+        
+        return nombre_completo
