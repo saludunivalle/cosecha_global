@@ -410,7 +410,12 @@ class UnivalleScraper:
             resultado.actividades_complementarias.extend(actividades)
         
         elif seccion_contexto == 'COMISION':
+            logger.info(f"🔵 Procesando sección COMISION con {len(filas)} filas")
+            logger.debug(f"Headers de comisión: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Agregadas {len(actividades)} actividades de COMISION")
+            for act in actividades:
+                logger.debug(f"  Comisión: Categoría='{act.get('CATEGORIA', '')}', Descripción='{act.get('DESCRIPCION', '')}', Horas='{act.get('HORAS SEMESTRE', '')}')")
             resultado.docente_en_comision.extend(actividades)
         
         elif seccion_contexto == 'PREGRADO':
@@ -1861,7 +1866,12 @@ class UnivalleScraper:
         
         # Docente en comisión
         elif any('TIPO DE COMISION' in h for h in headers_upper):
+            logger.info(f"🔵 Detectada tabla DOCENTE EN COMISION (por header 'TIPO DE COMISION')")
+            logger.debug(f"Headers: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Procesadas {len(actividades)} actividades de comisión")
+            for act in actividades:
+                logger.debug(f"  Comisión: Categoría='{act.get('CATEGORIA', '')}', Descripción='{act.get('DESCRIPCION', '')}', Horas='{act.get('HORAS SEMESTRE', '')}')")
             resultado.docente_en_comision.extend(actividades)
         
         # Actividades administrativas
@@ -1922,15 +1932,19 @@ class UnivalleScraper:
             if 'DESCRIPCION' in header_upper:
                 indice_descripcion = j
         
-        # Detectar si la segunda fila contiene categorías (para actividades complementarias)
-        # Esto ocurre cuando hay headers como "PARTICIPACION EN:" y la fila 1 tiene las categorías reales
-        if len(filas) > 1:
+        # Detectar si la segunda fila contiene categorías (solo para actividades complementarias)
+        # Para COMISION, la categoría está en una columna normal, NO en una fila separada
+        es_tabla_comision = any('TIPO DE COMISION' in h.upper() or ('TIPO' in h.upper() and 'COMISION' in h.upper()) for h in headers)
+        
+        if len(filas) > 1 and not es_tabla_comision:
             segunda_fila_celdas = self.extraer_celdas(filas[1])
             # Verificar si la segunda fila contiene categorías típicas de complementarias
             categorias_conocidas = ['CLAUSTRO', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
                                    'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION']
             
             es_fila_categorias = False
+            
+            # Verificar si la segunda fila contiene categorías conocidas
             for celda in segunda_fila_celdas:
                 celda_upper = celda.strip().upper() if celda else ''
                 if any(cat in celda_upper for cat in categorias_conocidas):
@@ -1978,7 +1992,7 @@ class UnivalleScraper:
                 if categoria:
                     actividad['CATEGORIA'] = categoria
                     actividad['Categoría'] = categoria
-                    logger.debug(f"  Categoría asignada: '{categoria}'")
+                    logger.debug(f"  Categoría asignada desde fila 2: '{categoria}'")
             
             # Extraer HORAS SEMESTRE usando índice identificado primero
             horas = ''
@@ -2063,6 +2077,23 @@ class UnivalleScraper:
             # Validar que el nombre NO sea un número
             if nombre and re.match(r'^\d+\.?\d*$', nombre):
                 logger.error(f"❌ ERROR: Nombre de actividad es un número '{nombre}' - las columnas están invertidas")
+            
+            # Para tablas de comisión, extraer categoría de la columna TIPO DE COMISION
+            if es_tabla_comision and 'CATEGORIA' not in actividad:
+                # Buscar el índice de la columna TIPO DE COMISION
+                indice_tipo_comision = -1
+                for j, header in enumerate(headers):
+                    if 'TIPO DE COMISION' in header.upper() or 'TIPO' in header.upper():
+                        indice_tipo_comision = j
+                        break
+                
+                # Extraer categoría de esa columna
+                if indice_tipo_comision >= 0 and indice_tipo_comision < len(celdas):
+                    categoria_comision = celdas[indice_tipo_comision].strip() if celdas[indice_tipo_comision] else ''
+                    if categoria_comision:
+                        actividad['CATEGORIA'] = categoria_comision
+                        actividad['Categoría'] = categoria_comision
+                        logger.debug(f"  Categoría de comisión extraída: '{categoria_comision}'")
             
             # Asegurar que CATEGORIA esté presente (incluso si está vacía)
             if 'CATEGORIA' not in actividad:
@@ -2275,8 +2306,10 @@ class UnivalleScraper:
                     tiene_tablas = len(self.extraer_tablas(html)) < 2
                     if tiene_formulario and tiene_tablas:
                         raise ValueError("Página de login detectada - no se encontraron datos del docente")
-                    # No hay actividades para este docente/período - esto es normal, retornar lista vacía
+                    # No hay actividades para este docente/período
                     logger.info(f"ℹ️ Docente {cedula_limpia} sin actividades para el período {periodo_label}")
+                    # Si llegamos aquí y no hay actividades, significa que tampoco hay datos personales
+                    # (de lo contrario, _extraer_actividades_desde_html habría creado un registro base)
                     return []
                 
                 # Validaciones robustas de calidad de datos
@@ -2584,7 +2617,20 @@ class UnivalleScraper:
         logger.debug(f"Total actividades de PREGRADO: {len(datos_docente.actividades_pregrado)}")
         for actividad in datos_docente.actividades_pregrado:
             # Log para debug de cada actividad
-            logger.debug(f"  Pregrado - nombre_asignatura: '{actividad.nombre_asignatura}', horas_semestre: '{actividad.horas_semestre}'")
+            nombre_asig = (actividad.nombre_asignatura or '').strip()
+            logger.debug(f"  Pregrado - nombre_asignatura: '{nombre_asig}', horas_semestre: '{actividad.horas_semestre}'")
+            
+            # Filtrar actividades vacías o con títulos de sección
+            if not nombre_asig:
+                logger.debug(f"    ⚠️ Saltando actividad de pregrado sin nombre")
+                continue
+            
+            # Verificar que no sea un título de sección
+            nombre_upper = nombre_asig.upper()
+            if any(titulo in nombre_upper for titulo in ['ACTIVIDADES DE DOCENCIA', 'PREGRADO', 'POSTGRADO']):
+                logger.debug(f"    ⚠️ Saltando título de sección: '{nombre_asig}'")
+                continue
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2592,7 +2638,7 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Docencia',
                 categoria='Pregrado',
-                nombre_actividad=actividad.nombre_asignatura or '',
+                nombre_actividad=nombre_asig,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
@@ -2608,7 +2654,20 @@ class UnivalleScraper:
         logger.debug(f"Total actividades de POSTGRADO: {len(datos_docente.actividades_postgrado)}")
         for actividad in datos_docente.actividades_postgrado:
             # Log para debug de cada actividad
-            logger.debug(f"  Postgrado - nombre_asignatura: '{actividad.nombre_asignatura}', horas_semestre: '{actividad.horas_semestre}'")
+            nombre_asig = (actividad.nombre_asignatura or '').strip()
+            logger.debug(f"  Postgrado - nombre_asignatura: '{nombre_asig}', horas_semestre: '{actividad.horas_semestre}'")
+            
+            # Filtrar actividades vacías o con títulos de sección
+            if not nombre_asig:
+                logger.debug(f"    ⚠️ Saltando actividad de postgrado sin nombre")
+                continue
+            
+            # Verificar que no sea un título de sección
+            nombre_upper = nombre_asig.upper()
+            if any(titulo in nombre_upper for titulo in ['ACTIVIDADES DE DOCENCIA', 'PREGRADO', 'POSTGRADO']):
+                logger.debug(f"    ⚠️ Saltando título de sección: '{nombre_asig}'")
+                continue
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2616,7 +2675,7 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Docencia',
                 categoria='Postgrado',
-                nombre_actividad=actividad.nombre_asignatura or '',
+                nombre_actividad=nombre_asig,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
@@ -2774,15 +2833,34 @@ class UnivalleScraper:
             ))
         
         # Procesar docente en comisión
-        for actividad in datos_docente.docente_en_comision:
+        logger.info(f"📋 Procesando {len(datos_docente.docente_en_comision)} actividades de COMISION para construcción final")
+        for i, actividad in enumerate(datos_docente.docente_en_comision, 1):
+            # Extraer categoría: primero buscar en CATEGORIA (nueva lógica), luego en TIPO DE COMISION (legacy)
+            categoria_comision = (
+                actividad.get('CATEGORIA', '') or 
+                actividad.get('Categoría', '') or
+                actividad.get('TIPO DE COMISION', '') or 
+                actividad.get('Tipo de Comision', '')
+            )
+            
+            # Extraer descripción
+            descripcion_comision = (
+                actividad.get('DESCRIPCION', '') or 
+                actividad.get('Descripcion', '') or
+                actividad.get('DESCRIPCION DEL CARGO', '')
+            )
+            
+            logger.debug(f"  Comisión #{i}: Categoría='{categoria_comision}', Descripción='{descripcion_comision}'")
+            logger.debug(f"    Keys en actividad: {list(actividad.keys())}")
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
                 tipo_actividad='Comisión',
-                categoria=actividad.get('TIPO DE COMISION', '') or actividad.get('Tipo de Comision', ''),
-                nombre_actividad=actividad.get('DESCRIPCION', '') or actividad.get('Descripcion', ''),
+                categoria=categoria_comision,
+                nombre_actividad=descripcion_comision,
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 departamento_original=departamento_original,
                 periodo=periodo_label,
@@ -2794,6 +2872,35 @@ class UnivalleScraper:
             ))
         
         logger.debug(f"Total actividades extraídas: {len(actividades)}")
+        
+        # Si no hay actividades pero sí hay información personal, crear un registro base
+        if len(actividades) == 0:
+            # Verificar que al menos tengamos algunos datos personales
+            tiene_datos_personales = (
+                nombre_completo and nombre_completo != 'No disponible'
+            ) or escuela or departamento or vinculacion
+            
+            if tiene_datos_personales:
+                logger.info(f"📝 No hay actividades pero sí datos personales - creando registro base para {cedula}")
+                actividades.append(self._construir_actividad_dict(
+                    cedula=cedula,
+                    nombre_profesor=nombre_completo,
+                    escuela=escuela,
+                    departamento=departamento,
+                    tipo_actividad='Sin actividades',
+                    categoria='',
+                    nombre_actividad='Sin actividades registradas',
+                    numero_horas='0',
+                    periodo=periodo_label,
+                    actividad='SIN ACTIVIDADES',
+                    vinculacion=vinculacion,
+                    dedicacion=dedicacion,
+                    nivel=nivel,
+                    cargo=cargo,
+                    departamento_original=departamento_original,
+                ))
+                logger.info(f"✓ Registro base creado con datos personales")
+        
         return actividades
     
     def _construir_actividad_dict(
@@ -2957,8 +3064,17 @@ class UnivalleScraper:
         Returns:
             Nombre completo formateado
         """
-        return formatear_nombre_completo(
+        nombre_completo = formatear_nombre_completo(
             nombre=info.nombre,
             apellido1=info.apellido1,
             apellido2=info.apellido2
         )
+        
+        # Logging para debug si el nombre es 'No disponible'
+        if nombre_completo == 'No disponible':
+            logger.warning(
+                f"⚠️ Nombre completo 'No disponible' - "
+                f"Datos: nombre='{info.nombre}', apellido1='{info.apellido1}', apellido2='{info.apellido2}'"
+            )
+        
+        return nombre_completo
