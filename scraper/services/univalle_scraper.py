@@ -2785,14 +2785,29 @@ class UnivalleScraper:
         
         # Procesar docente en comisión
         for actividad in datos_docente.docente_en_comision:
+            # Extraer categoría: primero buscar en CATEGORIA (nueva lógica), luego en TIPO DE COMISION (legacy)
+            categoria_comision = (
+                actividad.get('CATEGORIA', '') or 
+                actividad.get('Categoría', '') or
+                actividad.get('TIPO DE COMISION', '') or 
+                actividad.get('Tipo de Comision', '')
+            )
+            
+            # Extraer descripción
+            descripcion_comision = (
+                actividad.get('DESCRIPCION', '') or 
+                actividad.get('Descripcion', '') or
+                actividad.get('DESCRIPCION DEL CARGO', '')
+            )
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
                 tipo_actividad='Comisión',
-                categoria=actividad.get('TIPO DE COMISION', '') or actividad.get('Tipo de Comision', ''),
-                nombre_actividad=actividad.get('DESCRIPCION', '') or actividad.get('Descripcion', ''),
+                categoria=categoria_comision,
+                nombre_actividad=descripcion_comision,
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 departamento_original=departamento_original,
                 periodo=periodo_label,
