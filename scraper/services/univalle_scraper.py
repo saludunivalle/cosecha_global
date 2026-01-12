@@ -2306,8 +2306,10 @@ class UnivalleScraper:
                     tiene_tablas = len(self.extraer_tablas(html)) < 2
                     if tiene_formulario and tiene_tablas:
                         raise ValueError("Página de login detectada - no se encontraron datos del docente")
-                    # No hay actividades para este docente/período - esto es normal, retornar lista vacía
+                    # No hay actividades para este docente/período
                     logger.info(f"ℹ️ Docente {cedula_limpia} sin actividades para el período {periodo_label}")
+                    # Si llegamos aquí y no hay actividades, significa que tampoco hay datos personales
+                    # (de lo contrario, _extraer_actividades_desde_html habría creado un registro base)
                     return []
                 
                 # Validaciones robustas de calidad de datos
@@ -2870,6 +2872,35 @@ class UnivalleScraper:
             ))
         
         logger.debug(f"Total actividades extraídas: {len(actividades)}")
+        
+        # Si no hay actividades pero sí hay información personal, crear un registro base
+        if len(actividades) == 0:
+            # Verificar que al menos tengamos algunos datos personales
+            tiene_datos_personales = (
+                nombre_completo and nombre_completo != 'No disponible'
+            ) or escuela or departamento or vinculacion
+            
+            if tiene_datos_personales:
+                logger.info(f"📝 No hay actividades pero sí datos personales - creando registro base para {cedula}")
+                actividades.append(self._construir_actividad_dict(
+                    cedula=cedula,
+                    nombre_profesor=nombre_completo,
+                    escuela=escuela,
+                    departamento=departamento,
+                    tipo_actividad='Sin actividades',
+                    categoria='',
+                    nombre_actividad='Sin actividades registradas',
+                    numero_horas='0',
+                    periodo=periodo_label,
+                    actividad='SIN ACTIVIDADES',
+                    vinculacion=vinculacion,
+                    dedicacion=dedicacion,
+                    nivel=nivel,
+                    cargo=cargo,
+                    departamento_original=departamento_original,
+                ))
+                logger.info(f"✓ Registro base creado con datos personales")
+        
         return actividades
     
     def _construir_actividad_dict(
