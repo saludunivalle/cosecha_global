@@ -1932,30 +1932,24 @@ class UnivalleScraper:
             if 'DESCRIPCION' in header_upper:
                 indice_descripcion = j
         
-        # Detectar si la segunda fila contiene categorías (para actividades complementarias y comisión)
-        # Esto ocurre cuando hay headers como "PARTICIPACION EN:" o "TIPO DE COMISION :" y la fila 1 tiene las categorías reales
-        es_tabla_comision = any('TIPO DE COMISION' in h.upper() or 'TIPO' in h.upper() and 'COMISION' in h.upper() for h in headers)
+        # Detectar si la segunda fila contiene categorías (solo para actividades complementarias)
+        # Para COMISION, la categoría está en una columna normal, NO en una fila separada
+        es_tabla_comision = any('TIPO DE COMISION' in h.upper() or ('TIPO' in h.upper() and 'COMISION' in h.upper()) for h in headers)
         
-        if len(filas) > 1:
+        if len(filas) > 1 and not es_tabla_comision:
             segunda_fila_celdas = self.extraer_celdas(filas[1])
-            # Verificar si la segunda fila contiene categorías típicas de complementarias o comisión
+            # Verificar si la segunda fila contiene categorías típicas de complementarias
             categorias_conocidas = ['CLAUSTRO', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
-                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION',
-                                   'AÑO SABATICO', 'AÑO SABÁTICO', 'SABATICO', 'SABÁTICO']
+                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION']
             
             es_fila_categorias = False
             
-            # Para tablas de comisión, la fila 1 siempre contiene la categoría
-            if es_tabla_comision:
-                es_fila_categorias = True
-                logger.debug(f"✓ Tabla de comisión detectada - usando fila 1 como categoría")
-            else:
-                # Para otras tablas, verificar si la segunda fila contiene categorías conocidas
-                for celda in segunda_fila_celdas:
-                    celda_upper = celda.strip().upper() if celda else ''
-                    if any(cat in celda_upper for cat in categorias_conocidas):
-                        es_fila_categorias = True
-                        break
+            # Verificar si la segunda fila contiene categorías conocidas
+            for celda in segunda_fila_celdas:
+                celda_upper = celda.strip().upper() if celda else ''
+                if any(cat in celda_upper for cat in categorias_conocidas):
+                    es_fila_categorias = True
+                    break
             
             # Si detectamos categorías en la segunda fila, usarla como categorías
             if es_fila_categorias:
@@ -1998,7 +1992,7 @@ class UnivalleScraper:
                 if categoria:
                     actividad['CATEGORIA'] = categoria
                     actividad['Categoría'] = categoria
-                    logger.debug(f"  Categoría asignada: '{categoria}'")
+                    logger.debug(f"  Categoría asignada desde fila 2: '{categoria}'")
             
             # Extraer HORAS SEMESTRE usando índice identificado primero
             horas = ''
@@ -2083,6 +2077,23 @@ class UnivalleScraper:
             # Validar que el nombre NO sea un número
             if nombre and re.match(r'^\d+\.?\d*$', nombre):
                 logger.error(f"❌ ERROR: Nombre de actividad es un número '{nombre}' - las columnas están invertidas")
+            
+            # Para tablas de comisión, extraer categoría de la columna TIPO DE COMISION
+            if es_tabla_comision and 'CATEGORIA' not in actividad:
+                # Buscar el índice de la columna TIPO DE COMISION
+                indice_tipo_comision = -1
+                for j, header in enumerate(headers):
+                    if 'TIPO DE COMISION' in header.upper() or 'TIPO' in header.upper():
+                        indice_tipo_comision = j
+                        break
+                
+                # Extraer categoría de esa columna
+                if indice_tipo_comision >= 0 and indice_tipo_comision < len(celdas):
+                    categoria_comision = celdas[indice_tipo_comision].strip() if celdas[indice_tipo_comision] else ''
+                    if categoria_comision:
+                        actividad['CATEGORIA'] = categoria_comision
+                        actividad['Categoría'] = categoria_comision
+                        logger.debug(f"  Categoría de comisión extraída: '{categoria_comision}'")
             
             # Asegurar que CATEGORIA esté presente (incluso si está vacía)
             if 'CATEGORIA' not in actividad:
