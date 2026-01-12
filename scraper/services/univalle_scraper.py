@@ -410,7 +410,12 @@ class UnivalleScraper:
             resultado.actividades_complementarias.extend(actividades)
         
         elif seccion_contexto == 'COMISION':
+            logger.info(f"🔵 Procesando sección COMISION con {len(filas)} filas")
+            logger.debug(f"Headers de comisión: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Agregadas {len(actividades)} actividades de COMISION")
+            for act in actividades:
+                logger.debug(f"  Comisión: Categoría='{act.get('CATEGORIA', '')}', Descripción='{act.get('DESCRIPCION', '')}', Horas='{act.get('HORAS SEMESTRE', '')}')")
             resultado.docente_en_comision.extend(actividades)
         
         elif seccion_contexto == 'PREGRADO':
@@ -1861,7 +1866,12 @@ class UnivalleScraper:
         
         # Docente en comisión
         elif any('TIPO DE COMISION' in h for h in headers_upper):
+            logger.info(f"🔵 Detectada tabla DOCENTE EN COMISION (por header 'TIPO DE COMISION')")
+            logger.debug(f"Headers: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Procesadas {len(actividades)} actividades de comisión")
+            for act in actividades:
+                logger.debug(f"  Comisión: Categoría='{act.get('CATEGORIA', '')}', Descripción='{act.get('DESCRIPCION', '')}', Horas='{act.get('HORAS SEMESTRE', '')}')")
             resultado.docente_en_comision.extend(actividades)
         
         # Actividades administrativas
@@ -2784,7 +2794,8 @@ class UnivalleScraper:
             ))
         
         # Procesar docente en comisión
-        for actividad in datos_docente.docente_en_comision:
+        logger.info(f"📋 Procesando {len(datos_docente.docente_en_comision)} actividades de COMISION para construcción final")
+        for i, actividad in enumerate(datos_docente.docente_en_comision, 1):
             # Extraer categoría: primero buscar en CATEGORIA (nueva lógica), luego en TIPO DE COMISION (legacy)
             categoria_comision = (
                 actividad.get('CATEGORIA', '') or 
@@ -2799,6 +2810,9 @@ class UnivalleScraper:
                 actividad.get('Descripcion', '') or
                 actividad.get('DESCRIPCION DEL CARGO', '')
             )
+            
+            logger.debug(f"  Comisión #{i}: Categoría='{categoria_comision}', Descripción='{descripcion_comision}'")
+            logger.debug(f"    Keys en actividad: {list(actividad.keys())}")
             
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
