@@ -410,7 +410,12 @@ class UnivalleScraper:
             resultado.actividades_complementarias.extend(actividades)
         
         elif seccion_contexto == 'COMISION':
+            logger.info(f"🔵 Procesando sección COMISION con {len(filas)} filas")
+            logger.debug(f"Headers de comisión: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Agregadas {len(actividades)} actividades de COMISION")
+            for act in actividades:
+                logger.debug(f"  Comisión: Categoría='{act.get('CATEGORIA', '')}', Descripción='{act.get('DESCRIPCION', '')}', Horas='{act.get('HORAS SEMESTRE', '')}')")
             resultado.docente_en_comision.extend(actividades)
         
         elif seccion_contexto == 'PREGRADO':
@@ -1861,7 +1866,12 @@ class UnivalleScraper:
         
         # Docente en comisión
         elif any('TIPO DE COMISION' in h for h in headers_upper):
+            logger.info(f"🔵 Detectada tabla DOCENTE EN COMISION (por header 'TIPO DE COMISION')")
+            logger.debug(f"Headers: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Procesadas {len(actividades)} actividades de comisión")
+            for act in actividades:
+                logger.debug(f"  Comisión: Categoría='{act.get('CATEGORIA', '')}', Descripción='{act.get('DESCRIPCION', '')}', Horas='{act.get('HORAS SEMESTRE', '')}')")
             resultado.docente_en_comision.extend(actividades)
         
         # Actividades administrativas
@@ -1892,6 +1902,8 @@ class UnivalleScraper:
         indice_titulo = -1
         indice_cargo = -1
         indice_descripcion = -1
+        categorias_segunda_fila = []
+        inicio_datos = 1  # Por defecto, los datos empiezan en fila 1
         
         for j, header in enumerate(headers):
             header_upper = header.upper()
@@ -1920,9 +1932,34 @@ class UnivalleScraper:
             if 'DESCRIPCION' in header_upper:
                 indice_descripcion = j
         
-        logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}")
+        # Detectar si la segunda fila contiene categorías (solo para actividades complementarias)
+        # Para COMISION, la categoría está en una columna normal, NO en una fila separada
+        es_tabla_comision = any('TIPO DE COMISION' in h.upper() or ('TIPO' in h.upper() and 'COMISION' in h.upper()) for h in headers)
         
-        for i in range(1, len(filas)):
+        if len(filas) > 1 and not es_tabla_comision:
+            segunda_fila_celdas = self.extraer_celdas(filas[1])
+            # Verificar si la segunda fila contiene categorías típicas de complementarias
+            categorias_conocidas = ['CLAUSTRO', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
+                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION']
+            
+            es_fila_categorias = False
+            
+            # Verificar si la segunda fila contiene categorías conocidas
+            for celda in segunda_fila_celdas:
+                celda_upper = celda.strip().upper() if celda else ''
+                if any(cat in celda_upper for cat in categorias_conocidas):
+                    es_fila_categorias = True
+                    break
+            
+            # Si detectamos categorías en la segunda fila, usarla como categorías
+            if es_fila_categorias:
+                categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
+                inicio_datos = 2  # Los datos empiezan en la fila 2
+                logger.debug(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
+        
+        logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, Inicio datos={inicio_datos}")
+        
+        for i in range(inicio_datos, len(filas)):
             celdas = self.extraer_celdas(filas[i])
             
             if all(not c or not c.strip() for c in celdas):
@@ -1937,6 +1974,25 @@ class UnivalleScraper:
                     header_norm = header.upper()
                     actividad[header] = valor
                     actividad[header_norm] = valor
+            
+            # Si hay categorías en segunda fila, asignar la categoría correspondiente
+            if categorias_segunda_fila:
+                # Buscar en qué columna hay datos para determinar la categoría
+                categoria = ''
+                for j, celda in enumerate(celdas):
+                    if celda and celda.strip() and j < len(categorias_segunda_fila):
+                        # Verificar que no sea solo el valor de horas
+                        celda_val = celda.strip()
+                        if not re.match(r'^\d+\.?\d*$', celda_val) or j == indice_nombre:
+                            # Si encontramos datos en esta columna, usar la categoría correspondiente
+                            if categorias_segunda_fila[j]:
+                                categoria = categorias_segunda_fila[j]
+                                break
+                
+                if categoria:
+                    actividad['CATEGORIA'] = categoria
+                    actividad['Categoría'] = categoria
+                    logger.debug(f"  Categoría asignada desde fila 2: '{categoria}'")
             
             # Extraer HORAS SEMESTRE usando índice identificado primero
             horas = ''
@@ -2021,6 +2077,28 @@ class UnivalleScraper:
             # Validar que el nombre NO sea un número
             if nombre and re.match(r'^\d+\.?\d*$', nombre):
                 logger.error(f"❌ ERROR: Nombre de actividad es un número '{nombre}' - las columnas están invertidas")
+            
+            # Para tablas de comisión, extraer categoría de la columna TIPO DE COMISION
+            if es_tabla_comision and 'CATEGORIA' not in actividad:
+                # Buscar el índice de la columna TIPO DE COMISION
+                indice_tipo_comision = -1
+                for j, header in enumerate(headers):
+                    if 'TIPO DE COMISION' in header.upper() or 'TIPO' in header.upper():
+                        indice_tipo_comision = j
+                        break
+                
+                # Extraer categoría de esa columna
+                if indice_tipo_comision >= 0 and indice_tipo_comision < len(celdas):
+                    categoria_comision = celdas[indice_tipo_comision].strip() if celdas[indice_tipo_comision] else ''
+                    if categoria_comision:
+                        actividad['CATEGORIA'] = categoria_comision
+                        actividad['Categoría'] = categoria_comision
+                        logger.debug(f"  Categoría de comisión extraída: '{categoria_comision}'")
+            
+            # Asegurar que CATEGORIA esté presente (incluso si está vacía)
+            if 'CATEGORIA' not in actividad:
+                actividad['CATEGORIA'] = ''
+                actividad['Categoría'] = ''
             
             actividades.append(actividad)
         
@@ -2700,13 +2778,21 @@ class UnivalleScraper:
         
         # Procesar actividades complementarias
         for actividad in datos_docente.actividades_complementarias:
+            # Obtener categoría: primero intentar CATEGORIA (nueva lógica), 
+            # luego PARTICIPACION EN (legacy), luego vacío
+            categoria_complementaria = (
+                actividad.get('CATEGORIA', '') or 
+                actividad.get('Categoría', '') or
+                actividad.get('PARTICIPACION EN', '') or 
+                ''
+            )
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
                 tipo_actividad='Complementarias',
-                categoria=actividad.get('PARTICIPACION EN', '') or '',
+                categoria=categoria_complementaria,
                 nombre_actividad=actividad.get('NOMBRE', '') or actividad.get('Nombre', ''),
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 periodo=periodo_label,
@@ -2719,15 +2805,34 @@ class UnivalleScraper:
             ))
         
         # Procesar docente en comisión
-        for actividad in datos_docente.docente_en_comision:
+        logger.info(f"📋 Procesando {len(datos_docente.docente_en_comision)} actividades de COMISION para construcción final")
+        for i, actividad in enumerate(datos_docente.docente_en_comision, 1):
+            # Extraer categoría: primero buscar en CATEGORIA (nueva lógica), luego en TIPO DE COMISION (legacy)
+            categoria_comision = (
+                actividad.get('CATEGORIA', '') or 
+                actividad.get('Categoría', '') or
+                actividad.get('TIPO DE COMISION', '') or 
+                actividad.get('Tipo de Comision', '')
+            )
+            
+            # Extraer descripción
+            descripcion_comision = (
+                actividad.get('DESCRIPCION', '') or 
+                actividad.get('Descripcion', '') or
+                actividad.get('DESCRIPCION DEL CARGO', '')
+            )
+            
+            logger.debug(f"  Comisión #{i}: Categoría='{categoria_comision}', Descripción='{descripcion_comision}'")
+            logger.debug(f"    Keys en actividad: {list(actividad.keys())}")
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
                 escuela=escuela,
                 departamento=departamento,
                 tipo_actividad='Comisión',
-                categoria=actividad.get('TIPO DE COMISION', '') or actividad.get('Tipo de Comision', ''),
-                nombre_actividad=actividad.get('DESCRIPCION', '') or actividad.get('Descripcion', ''),
+                categoria=categoria_comision,
+                nombre_actividad=descripcion_comision,
                 numero_horas=actividad.get('HORAS SEMESTRE', '') or actividad.get('Horas Semestre', ''),
                 departamento_original=departamento_original,
                 periodo=periodo_label,
