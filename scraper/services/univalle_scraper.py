@@ -1922,20 +1922,30 @@ class UnivalleScraper:
             if 'DESCRIPCION' in header_upper:
                 indice_descripcion = j
         
-        # Detectar si la segunda fila contiene categorías (para actividades complementarias)
-        # Esto ocurre cuando hay headers como "PARTICIPACION EN:" y la fila 1 tiene las categorías reales
+        # Detectar si la segunda fila contiene categorías (para actividades complementarias y comisión)
+        # Esto ocurre cuando hay headers como "PARTICIPACION EN:" o "TIPO DE COMISION :" y la fila 1 tiene las categorías reales
+        es_tabla_comision = any('TIPO DE COMISION' in h.upper() or 'TIPO' in h.upper() and 'COMISION' in h.upper() for h in headers)
+        
         if len(filas) > 1:
             segunda_fila_celdas = self.extraer_celdas(filas[1])
-            # Verificar si la segunda fila contiene categorías típicas de complementarias
+            # Verificar si la segunda fila contiene categorías típicas de complementarias o comisión
             categorias_conocidas = ['CLAUSTRO', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
-                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION']
+                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION',
+                                   'AÑO SABATICO', 'AÑO SABÁTICO', 'SABATICO', 'SABÁTICO']
             
             es_fila_categorias = False
-            for celda in segunda_fila_celdas:
-                celda_upper = celda.strip().upper() if celda else ''
-                if any(cat in celda_upper for cat in categorias_conocidas):
-                    es_fila_categorias = True
-                    break
+            
+            # Para tablas de comisión, la fila 1 siempre contiene la categoría
+            if es_tabla_comision:
+                es_fila_categorias = True
+                logger.debug(f"✓ Tabla de comisión detectada - usando fila 1 como categoría")
+            else:
+                # Para otras tablas, verificar si la segunda fila contiene categorías conocidas
+                for celda in segunda_fila_celdas:
+                    celda_upper = celda.strip().upper() if celda else ''
+                    if any(cat in celda_upper for cat in categorias_conocidas):
+                        es_fila_categorias = True
+                        break
             
             # Si detectamos categorías en la segunda fila, usarla como categorías
             if es_fila_categorias:
