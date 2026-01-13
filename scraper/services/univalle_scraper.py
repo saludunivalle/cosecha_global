@@ -1245,9 +1245,9 @@ class UnivalleScraper:
                             info.apellido2 = valor
                     elif header == 'NOMBRE':
                         # Permitir nombres con espacios, tildes, guiones, etc. Solo descartar si está vacío o es solo números
-                        #if not info.nombre and valor.isalpha():
-                        if not info.nombre and valor.isalpha():
+                        if not info.nombre and valor and not valor.isdigit():
                             info.nombre = valor
+                            logger.info(f"✅ NOMBRE encontrado en fila 2: '{valor}'")
                     elif 'UNIDAD' in header and 'ACADEMICA' in header:
                         if not info.unidad_academica:
                             info.unidad_academica = valor
