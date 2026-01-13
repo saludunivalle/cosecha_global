@@ -1244,10 +1244,12 @@ class UnivalleScraper:
                         if not info.apellido2:
                             info.apellido2 = valor
                     elif header == 'NOMBRE':
-                        # Permitir nombres con espacios, tildes, guiones, etc. Solo descartar si está vacío o es solo números
-                        if not info.nombre and valor and not valor.isdigit():
-                            info.nombre = valor
-                            logger.info(f"✅ NOMBRE encontrado en fila 2: '{valor}'")
+                        # Validación estricta para el campo NOMBRE esperado
+                        if not info.nombre and valor and len(valor) > 1 and not valor.isdigit():
+                            # Evitar capturar headers como "UNIDAD ACADEMICA"
+                            if 'UNIDAD' not in valor.upper() and 'ACADEMICA' not in valor.upper():
+                                info.nombre = valor
+                                logger.info(f"✅ NOMBRE encontrado en fila 2: '{valor}'")
                     elif 'UNIDAD' in header and 'ACADEMICA' in header:
                         if not info.unidad_academica:
                             info.unidad_academica = valor
@@ -1261,6 +1263,27 @@ class UnivalleScraper:
                         if not info.cargo:
                             info.cargo = valor
                             logger.info(f"CARGO encontrado en fila 2, columna {i}: '{valor}'")
+                
+                # Si no se encontró el nombre en la estructura normal, buscar en valores_fila2 directamente
+                # Según los logs, a veces el nombre está en valores_fila2 cuando headers está mal alineado
+                if not info.nombre and len(valores_fila2) >= 4:
+                    # Intentar encontrar el nombre en las posiciones típicas (después de apellidos)
+                    for idx, val in enumerate(valores_fila2):
+                        if val and len(val) > 1 and not val.isdigit():
+                            # Evitar capturar headers o campos conocidos
+                            val_upper = val.upper()
+                            if (val_upper not in ['CEDULA', 'DOCUMENTO', 'APELLIDO1', 'APELLIDO2', '1 APELLIDO', '2 APELLIDO', 'NOMBRE', 'UNIDAD ACADEMICA', 'ESCUELA', 'DEPARTAMENTO'] 
+                                and 'UNIDAD' not in val_upper 
+                                and 'ACADEMICA' not in val_upper
+                                and 'ESCUELA' not in val_upper
+                                and 'REHABILITACION' not in val_upper
+                                and idx >= 3):  # Buscar después de cédula y apellidos
+                                # Verificar que parece un nombre (tiene letras y posiblemente espacios)
+                                if any(c.isalpha() for c in val) and len(val.split()) <= 4:
+                                    info.nombre = val
+                                    logger.info(f"✅ NOMBRE encontrado en valores_fila2[{idx}]: '{val}'")
+                                    break
+                
                 # Procesar fila 4 si existe (vinculación, categoría, etc.)
                 if len(filas) > 3:
                     headers_fila3 = [c.get_text(strip=True).upper() for c in filas[2].find_all(['td', 'th'])]
