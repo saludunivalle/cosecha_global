@@ -2911,7 +2911,7 @@ class UnivalleScraper:
                     escuela=escuela,
                     departamento=departamento,
                     tipo_actividad='Sin actividades',
-                    categoria='',
+                    categoria='Sin actividad',
                     nombre_actividad='Sin actividades registradas',
                     numero_horas='0',
                     periodo=periodo_label,
