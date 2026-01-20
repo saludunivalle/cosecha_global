@@ -187,16 +187,108 @@ def limpiar_escuela(escuela: str) -> str:
     NAMES_SCHOOL = {
         'BACTERIOLOGIA': 'Bacteriología y Lab. Clínico',
         'BACTERIOLOGIA Y LABORAT CLINICO': 'Bacteriología y Lab. Clínico',
+        'BACTERIOLOGIA Y LABORA': 'Bacteriología y Lab. Clínico',
         'CIENCIAS BASICAS': 'Ciencias Básicas',
+        'CIENCIAS FISIOLOGICAS': 'Ciencias Básicas',
+        'CIENCIAS FISIOLÓGICAS': 'Ciencias Básicas',
+        'MICROBIOLOGIA': 'Ciencias Básicas',
+        'MICROBIOLOGÍA': 'Ciencias Básicas',
+        'MORFOLOGIA': 'Ciencias Básicas',
+        'MORFOLOGÍA': 'Ciencias Básicas',
         'ODONTOLOGIA': 'Odontología',
         'ENFERMERIA': 'Enfermería',
         'MEDICINA': 'Medicina',
         'SALUD PUBLICA': 'Salud Pública',
         'REHABILITACION HUMANA': 'Rehabilitación Humana',
+        'REHABILITACION HUMA': 'Rehabilitación Humana',
     }
     
     # Buscar en el mapa de normalización
     return NAMES_SCHOOL.get(esc, esc.title() if esc else '')
+
+
+def determinar_escuela_desde_departamento(departamento: str) -> str:
+    """
+    Determina la escuela correcta basándose en el departamento.
+    
+    Args:
+        departamento: Nombre del departamento (ya normalizado)
+        
+    Returns:
+        Nombre de la escuela correspondiente
+    """
+    if not departamento:
+        return ''
+    
+    dept_upper = departamento.upper().strip()
+    
+    # Mapeo de departamentos a escuelas
+    # Departamentos de Ciencias Básicas
+    DEPARTAMENTOS_CIENCIAS_BASICAS = [
+        'CIENCIAS FISIOLOGICAS',
+        'CIENCIAS FISIOLÓGICAS',
+        'FISIOLOGICAS',
+        'FISIOLÓGICAS',
+        'MICROBIOLOGIA',
+        'MICROBIOLOGÍA',
+        'MORFOLOGIA',
+        'MORFOLOGÍA'
+    ]
+    
+    # Departamentos de Medicina
+    DEPARTAMENTOS_MEDICINA = [
+        'CIRUGIA',
+        'CIRUGÍA',
+        'CIRUGIA GENERAL',
+        'MEDICINA INTERNA',
+        'MEDICINA FAMILIAR',
+        'MEDICINA FAMIL',
+        'MEDICINA FISICA Y REHABILITACION',
+        'MEDICINA FISICA Y',
+        'MEDICINA FÍSICA Y REHABILITACIÓN',
+        'PSIQUIATRIA',
+        'PSIQUIATRÍA',
+        'PATOLOGIA',
+        'PATOLOGÍA',
+        'ANESTESIA',
+        'ANESTESIOLOGIA',
+        'ANESTESIOLOGÍA',
+        'OBSTETRICIA Y GINECOLOGIA',
+        'OBSTETRICIA Y',
+        'GINECOLOGIA Y OBSTETRICIA',
+        'GINECOLOGÍA Y OBSTETRICIA',
+        'PEDIATRIA',
+        'PEDIATRÍA',
+        'CIRUGIA PEDIATRICA',
+        'CIRUGÍA PEDIÁTRICA',
+        'NEUROCIRUGIA',
+        'NEUROCIRUGÍA',
+        'OFTALMOLOGIA',
+        'OFTALMOLOGÍA',
+        'ORTOPEDIA',
+        'OTORRINO',
+        'UROLOGIA',
+        'UROLOGÍA',
+        'CIRUGIA PLASTICA',
+        'CIRUGÍA PLÁSTICA',
+        'DERMATOLOGIA',
+        'DERMATOLOGÍA',
+        'RADIODIAGNOSTICO',
+        'RADIODIAGNÓSTICO'
+    ]
+    
+    # Verificar si pertenece a Ciencias Básicas
+    for dept in DEPARTAMENTOS_CIENCIAS_BASICAS:
+        if dept in dept_upper:
+            return 'Ciencias Básicas'
+    
+    # Verificar si pertenece a Medicina
+    for dept in DEPARTAMENTOS_MEDICINA:
+        if dept in dept_upper:
+            return 'Medicina'
+    
+    # Si no se encuentra mapeo, retornar vacío para usar la escuela original
+    return ''
 
 
 def formatear_nombre_completo(
