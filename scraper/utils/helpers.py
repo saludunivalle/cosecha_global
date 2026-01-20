@@ -204,7 +204,15 @@ def limpiar_escuela(escuela: str) -> str:
     }
     
     # Buscar en el mapa de normalización
-    return NAMES_SCHOOL.get(esc, esc.title() if esc else '')
+    escuela_normalizada = NAMES_SCHOOL.get(esc, esc.title() if esc else '')
+    
+    # Verificar si la escuela es realmente un departamento que debe mapearse
+    # (esto ocurre cuando el sistema pone un departamento en el campo de escuela)
+    escuela_desde_dept = determinar_escuela_desde_departamento(escuela_normalizada)
+    if escuela_desde_dept:
+        return escuela_desde_dept
+    
+    return escuela_normalizada
 
 
 def determinar_escuela_desde_departamento(departamento: str) -> str:
@@ -227,8 +235,10 @@ def determinar_escuela_desde_departamento(departamento: str) -> str:
     DEPARTAMENTOS_CIENCIAS_BASICAS = [
         'CIENCIAS FISIOLOGICAS',
         'CIENCIAS FISIOLÓGICAS',
+        'CIENCIAS FISIO',  # Versión corta
         'FISIOLOGICAS',
         'FISIOLÓGICAS',
+        'FISIO',  # Versión muy corta
         'MICROBIOLOGIA',
         'MICROBIOLOGÍA',
         'MORFOLOGIA',

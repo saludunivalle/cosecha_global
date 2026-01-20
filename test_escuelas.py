@@ -31,6 +31,22 @@ casos_prueba_escuelas = [
     # Escuelas que deben normalizarse
     ("REHABILITACION HUMA", "Rehabilitación Humana"),
     ("BACTERIOLOGIA Y LABORA", "Bacteriología y Lab. Clínico"),
+    
+    # Escuelas que en realidad son departamentos de Medicina
+    ("CIRUGIA", "Medicina"),
+    ("Medicina Famil", "Medicina"),
+    ("Medicina Interna", "Medicina"),
+    ("Psiquiatria", "Medicina"),
+    ("Patologia", "Medicina"),
+    ("Anestesia", "Medicina"),
+    ("Obstetricia Y", "Medicina"),
+    ("Pediatria", "Medicina"),
+    
+    # Escuelas que en realidad son departamentos de Ciencias Básicas
+    ("Ciencias Fisio", "Ciencias Básicas"),
+    ("MICROBIOLOGIA", "Ciencias Básicas"),
+    ("Morfologia", "Ciencias Básicas"),
+    ("Ciencias Fisiológicas", "Ciencias Básicas"),
 ]
 
 print("="*80)
