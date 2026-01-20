@@ -287,6 +287,16 @@ def determinar_escuela_desde_departamento(departamento: str) -> str:
         'RADIODIAGNÓSTICO'
     ]
     
+    # Departamentos de Salud Pública
+    DEPARTAMENTOS_SALUD_PUBLICA = [
+        'ADMINISTRACION Y ORGA',
+        'ADMINISTRACIÓN Y ORGA',
+        'ADMINISTRACION Y ORGANIZACION',
+        'ADMINISTRACIÓN Y ORGANIZACIÓN',
+        'SALUD PUBLICA',
+        'SALUD PÚBLICA'
+    ]
+    
     # Verificar si pertenece a Ciencias Básicas
     for dept in DEPARTAMENTOS_CIENCIAS_BASICAS:
         if dept in dept_upper:
@@ -296,6 +306,11 @@ def determinar_escuela_desde_departamento(departamento: str) -> str:
     for dept in DEPARTAMENTOS_MEDICINA:
         if dept in dept_upper:
             return 'Medicina'
+    
+    # Verificar si pertenece a Salud Pública
+    for dept in DEPARTAMENTOS_SALUD_PUBLICA:
+        if dept in dept_upper:
+            return 'Salud Pública'
     
     # Si no se encuentra mapeo, retornar vacío para usar la escuela original
     return ''

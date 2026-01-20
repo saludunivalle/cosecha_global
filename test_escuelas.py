@@ -25,6 +25,9 @@ casos_prueba_departamentos = [
     ("Anestesiología", "Medicina"),
     ("Obstetricia y Ginecología", "Medicina"),
     ("Pediatría", "Medicina"),
+    
+    # Departamentos que deben mapearse a Salud Pública
+    ("Administracion Y Orga", "Salud Pública"),
 ]
 
 casos_prueba_escuelas = [
@@ -47,6 +50,9 @@ casos_prueba_escuelas = [
     ("MICROBIOLOGIA", "Ciencias Básicas"),
     ("Morfologia", "Ciencias Básicas"),
     ("Ciencias Fisiológicas", "Ciencias Básicas"),
+    
+    # Escuelas que en realidad son departamentos de Salud Pública
+    ("Administracion Y Orga", "Salud Pública"),
 ]
 
 print("="*80)
