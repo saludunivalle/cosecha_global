@@ -1,6 +1,11 @@
 """
 Servicio de scraping del portal Univalle
 Basado en la lógica documentada en docs/SCRAPING_UNIVALLE_PYTHON.md
+
+MAPEO DE DEPARTAMENTOS A ESCUELAS (implementado en helpers.determinar_escuela_desde_departamento):
+- Ciencias Fisiológicas, Microbiología, Morfología → Ciencias Básicas
+- Cirugía, Medicina Interna, Medicina Familiar, Medicina Física y Rehabilitación,
+  Psiquiatría, Patología, Anestesiología, Obstetricia y Ginecología, Pediatría → Medicina
 """
 
 import re
@@ -37,6 +42,7 @@ from scraper.utils.helpers import (
     deduplicar_actividades,
     parsear_periodo_label,
     formatear_nombre_completo,
+    determinar_escuela_desde_departamento,
 )
 
 logger = logging.getLogger(__name__)
@@ -1191,7 +1197,18 @@ class UnivalleScraper:
         escuela_partes = [p for p in partes[1:] if p.upper() not in ["ESCUELA", "DEPARTAMENTO"]]
         escuela = " ".join(escuela_partes)
         
-        return departamento, escuela
+        # Limpiar departamento y escuela
+        departamento_limpio = limpiar_departamento(departamento)
+        escuela_limpia = limpiar_escuela(escuela)
+        
+        # Determinar escuela correcta basada en el departamento
+        escuela_desde_dept = determinar_escuela_desde_departamento(departamento_limpio)
+        
+        # Si se encontró una escuela basada en el departamento, usarla
+        if escuela_desde_dept:
+            escuela_limpia = escuela_desde_dept
+        
+        return departamento_limpio, escuela_limpia
     
     def _extraer_datos_personales_con_soup(self, html: str, info: InformacionPersonal) -> None:
         """
@@ -2622,6 +2639,12 @@ class UnivalleScraper:
             if departamento_raw:
                 departamento = limpiar_departamento(departamento_raw)
                 logger.debug(f"Departamento (fallback): '{departamento_raw}' -> '{departamento}'")
+                
+                # Determinar escuela correcta basada en el departamento
+                escuela_desde_dept = determinar_escuela_desde_departamento(departamento)
+                if escuela_desde_dept:
+                    escuela = escuela_desde_dept
+                    logger.debug(f"Escuela determinada desde departamento: '{escuela}'")
         
         vinculacion = info.vinculacion or ''
         dedicacion = info.dedicacion or ''
@@ -2968,6 +2991,11 @@ class UnivalleScraper:
         # Limpiar escuela y departamento
         escuela_limpia = limpiar_escuela(escuela)
         departamento_limpio = limpiar_departamento(departamento)
+        
+        # Determinar escuela correcta basada en el departamento
+        escuela_desde_dept = determinar_escuela_desde_departamento(departamento_limpio)
+        if escuela_desde_dept:
+            escuela_limpia = escuela_desde_dept
         
         # Construir diccionario (todos los campos en orden correcto)
         actividad_dict = {
