@@ -54,20 +54,7 @@ def limpiar_cedula(cedula: str) -> str:
 def corregir_encoding_mal_interpretado(texto: str) -> str:
     """
     Corrige texto que fue decodificado incorrectamente.
-    
-    Patrones comunes cuando UTF-8 se interpreta como Windows-1252:
-    - Ã± → ñ
-    - Ã³ → ó
-    - Ã­ → í
-    - Ã¡ → á
-    - Ã© → é
-    - Ãº → ú
-    - Ã' → Ñ
-    - Ã" → Ó
-    - Ã → Í
-    - Ã → Á
-    - Ã‰ → É
-    - Ãš → Ú
+    Patrones comunes cuando UTF-8 se interpreta como Windows-1252.
     
     Args:
         texto: Texto con encoding incorrecto
@@ -78,34 +65,39 @@ def corregir_encoding_mal_interpretado(texto: str) -> str:
     if not texto:
         return ''
     
-    # Diccionario de correcciones comunes
-    correcciones = {
-        'Ã±': 'ñ',
-        'Ã³': 'ó',
-        'Ã­': 'í',
-        'Ã¡': 'á',
-        'Ã©': 'é',
-        'Ãº': 'ú',
-        'Ã'': 'Ñ',
-        'Ã"': 'Ó',
-        'Ã': 'Í',
-        'Ã': 'Á',
-        'Ã‰': 'É',
-        'Ãš': 'Ú',
-        # Variantes que aparecen
-        'ÃA': 'Ñ',
-        'ÃO': 'Ó',
-        'ÃI': 'Í',
-        'Ã'A': 'ÑA',
-    }
+    # Mapeo de bytes UTF-8 mal interpretados como Windows-1252
+    # Usar códigos unicode para evitar problemas de encoding en el código fuente
+    correcciones = [
+        ('\xc3\xb1', 'ñ'),  # ñ
+        ('\xc3\xb3', 'ó'),  # ó
+        ('\xc3\xad', 'í'),  # í
+        ('\xc3\xa1', 'á'),  # á
+        ('\xc3\xa9', 'é'),  # é
+        ('\xc3\xba', 'ú'),  # ú
+        ('\xc3\x91', 'Ñ'),  # Ñ
+        ('\xc3\x93', 'Ó'),  # Ó
+        ('\xc3\x8d', 'Í'),  # Í
+        ('\xc3\x81', 'Á'),  # Á
+        ('\xc3\x89', 'É'),  # É
+        ('\xc3\x9a', 'Ú'),  # Ú
+    ]
     
     texto_corregido = texto
-    for incorrecto, correcto in correcciones.items():
+    for incorrecto, correcto in correcciones:
         texto_corregido = texto_corregido.replace(incorrecto, correcto)
     
-    # Patrón genérico: "Ã" seguido de letra mayúscula probablemente es un acento
-    # CIRUGÃA → CIRUGÍA (Ã + A → ÍA)
-    texto_corregido = re.sub(r'Ã([AEIOU])', lambda m: 'Í' + m.group(1), texto_corregido)
+    # Patrón adicional: "Ã" + vocal mayúscula
+    # CIRUGÃA -> CIRUGÍA
+    import re
+    patron_vocal = {
+        'A': 'ÍA',
+        'E': 'ÍE',
+        'I': 'ÍI',
+        'O': 'ÍO',
+        'U': 'ÍU',
+    }
+    for vocal, reemplazo in patron_vocal.items():
+        texto_corregido = texto_corregido.replace('Ã' + vocal, reemplazo)
     
     return texto_corregido
 
