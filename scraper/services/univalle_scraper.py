@@ -617,6 +617,9 @@ class UnivalleScraper:
             f"Comisión={len(resultado.docente_en_comision)}"
         )
         
+        if len(resultado.actividades_investigacion) == 0:
+            logger.warning(f"⚠️ ⚠️ ⚠️ NO se encontraron actividades de investigación para este docente")
+        
         return resultado
     
     def _actividad_a_dict(self, actividad: Any) -> Dict[str, Any]:
