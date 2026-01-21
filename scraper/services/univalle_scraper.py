@@ -372,7 +372,7 @@ class UnivalleScraper:
         id_periodo: int,
         seccion_contexto: str,
         resultado: DatosDocente
-    ):
+    ) -> bool:
         """
         Procesa una tabla de datos usando el contexto de la sección anterior.
         
@@ -386,6 +386,9 @@ class UnivalleScraper:
             id_periodo: ID del período
             seccion_contexto: Tipo de sección (INVESTIGACION, INTELECTUALES, etc.)
             resultado: Objeto donde guardar los resultados
+            
+        Returns:
+            True si la tabla fue procesada exitosamente, False si debe mantenerse el contexto
         """
         logger.debug(f"Procesando tabla con contexto de sección: {seccion_contexto}")
         
@@ -397,6 +400,12 @@ class UnivalleScraper:
             if filas:
                 headers = self.extraer_celdas(filas[0])
         
+        # Si la tabla tiene muy pocas filas (solo wrapper/título), no procesarla
+        # y mantener el contexto para la siguiente tabla
+        if len(filas) < 2:
+            logger.info(f"⚠️ Tabla con contexto {seccion_contexto} tiene solo {len(filas)} fila(s), omitiendo y manteniendo contexto")
+            return False  # No limpiar contexto, procesar siguiente tabla
+        
         if seccion_contexto == 'INVESTIGACION':
             logger.info(f"🔵 Procesando sección INVESTIGACION con {len(filas)} filas")
             logger.debug(f"Headers de investigación: {headers}")
@@ -407,19 +416,23 @@ class UnivalleScraper:
             for act in investigacion:
                 logger.debug(f"  Investigación: Nombre='{act.nombre_proyecto if hasattr(act, 'nombre_proyecto') else 'N/A'}', Horas='{act.horas_semestre if hasattr(act, 'horas_semestre') else 'N/A'}'") 
             resultado.actividades_investigacion.extend(investigacion)
+            return True
         
         elif seccion_contexto == 'INTELECTUALES':
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
             resultado.actividades_intelectuales.extend(actividades)
             logger.debug(f"Agregadas {len(actividades)} actividades intelectuales")
+            return True
         
         elif seccion_contexto == 'EXTENSION':
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
             resultado.actividades_extension.extend(actividades)
+            return True
         
         elif seccion_contexto == 'ADMINISTRATIVAS':
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
             resultado.actividades_administrativas.extend(actividades)
+            return True
         
         elif seccion_contexto == 'COMPLEMENTARIAS':
             logger.info(f"🔵 Procesando sección COMPLEMENTARIAS con {len(filas)} filas")
@@ -429,6 +442,7 @@ class UnivalleScraper:
             for act in actividades:
                 logger.debug(f"  Complementaria: Categoría='{act.get('CATEGORIA', '')}', Nombre='{act.get('NOMBRE', '')}', Horas='{act.get('HORAS SEMESTRE', '')}'")
             resultado.actividades_complementarias.extend(actividades)
+            return True
         
         elif seccion_contexto == 'COMISION':
             logger.info(f"🔵 Procesando sección COMISION con {len(filas)} filas")
@@ -438,24 +452,30 @@ class UnivalleScraper:
             for act in actividades:
                 logger.debug(f"  Comisión: Categoría='{act.get('CATEGORIA', '')}', Descripción='{act.get('DESCRIPCION', '')}', Horas='{act.get('HORAS SEMESTRE', '')}')")
             resultado.docente_en_comision.extend(actividades)
+            return True
         
         elif seccion_contexto == 'PREGRADO':
             # Procesar asignaturas de pregrado usando la sección detectada
             actividades = self._procesar_asignaturas_con_seccion(filas, headers, id_periodo, 'pregrado')
             resultado.actividades_pregrado.extend(actividades)
             logger.debug(f"Agregadas {len(actividades)} actividades de PREGRADO")
+            return True
         
         elif seccion_contexto == 'POSTGRADO':
             # Procesar asignaturas de postgrado usando la sección detectada
             actividades = self._procesar_asignaturas_con_seccion(filas, headers, id_periodo, 'postgrado')
             resultado.actividades_postgrado.extend(actividades)
             logger.debug(f"Agregadas {len(actividades)} actividades de POSTGRADO")
+            return True
         
         elif seccion_contexto == 'TESIS':
             # Procesar dirección de tesis
             tesis = self._procesar_tesis(filas, headers, id_periodo)
             resultado.actividades_tesis.extend(tesis)
             logger.debug(f"Agregadas {len(tesis)} actividades de TESIS")
+            return True
+        
+        return True  # Por defecto, considerar procesado
     
     def procesar_docente(self, cedula: str, id_periodo: int) -> DatosDocente:
         """
@@ -502,10 +522,12 @@ class UnivalleScraper:
             
             # Si tenemos contexto de sección, procesar con ese contexto
             if seccion_actual:
-                self._procesar_tabla_con_contexto(
+                procesado = self._procesar_tabla_con_contexto(
                     tabla_html, filas, headers, id_periodo, seccion_actual, resultado
                 )
-                seccion_actual = None  # Limpiar el contexto después de usar
+                # Solo limpiar el contexto si la tabla fue procesada exitosamente
+                if procesado:
+                    seccion_actual = None
                 continue
             
             # Identificar y procesar según tipo (sin contexto previo)
