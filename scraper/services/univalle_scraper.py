@@ -534,7 +534,9 @@ class UnivalleScraper:
             f"Pregrado={len(resultado.actividades_pregrado)}, "
             f"Postgrado={len(resultado.actividades_postgrado)}, "
             f"Investigación={len(resultado.actividades_investigacion)}, "
-            f"Intelectuales={len(resultado.actividades_intelectuales)}"
+            f"Intelectuales={len(resultado.actividades_intelectuales)}, "
+            f"Complementarias={len(resultado.actividades_complementarias)}, "
+            f"Comisión={len(resultado.docente_en_comision)}"
         )
         
         return resultado
@@ -1901,8 +1903,14 @@ class UnivalleScraper:
         
         # Actividades complementarias
         if any('PARTICIPACION EN' in h for h in headers_upper):
+            logger.info(f"🔵 Detectada tabla ACTIVIDADES COMPLEMENTARIAS (por header 'PARTICIPACION EN')")
+            logger.debug(f"Headers: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Procesadas {len(actividades)} actividades complementarias")
+            for act in actividades:
+                logger.debug(f"  Complementaria: Categoría='{act.get('CATEGORIA', '')}', Nombre='{act.get('NOMBRE', '')}', Horas='{act.get('HORAS SEMESTRE', '')}'")
             resultado.actividades_complementarias.extend(actividades)
+            return  # Evitar que caiga en otras condiciones
         
         # Docente en comisión
         elif any('TIPO DE COMISION' in h for h in headers_upper):
@@ -1979,8 +1987,8 @@ class UnivalleScraper:
         if len(filas) > 1 and not es_tabla_comision:
             segunda_fila_celdas = self.extraer_celdas(filas[1])
             # Verificar si la segunda fila contiene categorías típicas de complementarias
-            categorias_conocidas = ['CLAUSTRO', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
-                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION']
+            categorias_conocidas = ['CLAUSTRO', 'REPRESENTANTE', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
+                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION', 'COMITE', 'CONSEJO']
             
             es_fila_categorias = False
             
@@ -1995,13 +2003,15 @@ class UnivalleScraper:
             if es_fila_categorias:
                 categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
                 inicio_datos = 2  # Los datos empiezan en la fila 2
-                logger.debug(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
+                logger.info(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
+            else:
+                logger.debug(f"❌ Segunda fila NO contiene categorías conocidas: {segunda_fila_celdas}")
         
         logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, Inicio datos={inicio_datos}")
         
         # Si hay categorías en la segunda fila, procesar por columnas (estructura matricial)
         if categorias_segunda_fila:
-            logger.debug("📊 Procesando tabla con estructura matricial (categorías en fila 2)")
+            logger.info(f"📊 Procesando tabla con estructura matricial (categorías en fila 2) - Total categorías: {len([c for c in categorias_segunda_fila if c])}")
             # En esta estructura, cada COLUMNA representa una actividad completa
             # Recolectar todos los valores por columna primero
             columnas_datos = {}
