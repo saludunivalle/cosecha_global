@@ -518,6 +518,12 @@ class UnivalleScraper:
         
         html = self.obtener_html(cedula_limpia, id_periodo)
         
+        # TEMPORAL: Guardar HTML para debug
+        html_file = f"debug_html_{cedula_limpia}_{id_periodo}.html"
+        with open(html_file, 'w', encoding='utf-8') as f:
+            f.write(html)
+        logger.info(f"🔍 HTML guardado en: {html_file}")
+        
         resultado = DatosDocente(periodo=id_periodo)
         
         tablas = self.extraer_tablas(html)
