@@ -536,6 +536,9 @@ class UnivalleScraper:
             
             # Si tenemos contexto de sección, procesar con ese contexto
             if seccion_actual:
+                # Logging detallado para diagnóstico
+                primera_celda = self.extraer_texto_de_celda(filas[0]) if len(filas) > 0 else ""
+                logger.info(f"📋 Tabla con contexto '{seccion_actual}': {len(filas)} filas, Primera celda: '{primera_celda[:100]}'")
                 logger.debug(f"Intentando procesar tabla con contexto '{seccion_actual}' - {len(filas)} filas, headers: {headers[:3] if len(headers) > 3 else headers}")
                 procesado = self._procesar_tabla_con_contexto(
                     tabla_html, filas, headers, id_periodo, seccion_actual, resultado
