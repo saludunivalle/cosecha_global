@@ -509,12 +509,16 @@ class UnivalleScraper:
             # Primero verificar si es una tabla de título de sección
             seccion_detectada = self._detectar_seccion_titulo(tabla_html)
             if seccion_detectada:
+                if seccion_actual:
+                    logger.warning(f"⚠️ Se detectó nueva sección '{seccion_detectada}' pero había contexto activo '{seccion_actual}' sin procesar")
                 seccion_actual = seccion_detectada
                 logger.debug(f"Detectada sección: {seccion_actual}")
                 continue  # Pasar a la siguiente tabla (que tendrá los datos)
             
             filas = self.extraer_filas(tabla_html)
             if not filas:
+                if seccion_actual:
+                    logger.debug(f"Tabla sin filas encontrada con contexto '{seccion_actual}' activo")
                 continue
             
             headers = self.extraer_celdas(filas[0])
@@ -522,12 +526,16 @@ class UnivalleScraper:
             
             # Si tenemos contexto de sección, procesar con ese contexto
             if seccion_actual:
+                logger.debug(f"Intentando procesar tabla con contexto '{seccion_actual}' - {len(filas)} filas, headers: {headers[:3] if len(headers) > 3 else headers}")
                 procesado = self._procesar_tabla_con_contexto(
                     tabla_html, filas, headers, id_periodo, seccion_actual, resultado
                 )
                 # Solo limpiar el contexto si la tabla fue procesada exitosamente
                 if procesado:
+                    logger.debug(f"Contexto '{seccion_actual}' procesado y limpiado")
                     seccion_actual = None
+                else:
+                    logger.debug(f"Contexto '{seccion_actual}' se mantiene para siguiente tabla")
                 continue
             
             # Identificar y procesar según tipo (sin contexto previo)
