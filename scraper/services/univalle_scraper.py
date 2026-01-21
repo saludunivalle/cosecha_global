@@ -191,9 +191,19 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # CRÍTICO: Obtener bytes y decodificar explícitamente como ISO-8859-1
+            # CRÍTICO: Intentar decodificación automática primero, luego forzar UTF-8
+            # El portal puede enviar UTF-8 sin declararlo correctamente
             html_bytes = response.content
-            html = html_bytes.decode('iso-8859-1', errors='replace')
+            
+            # Intentar detectar encoding del HTML
+            try:
+                # Primero intentar UTF-8 (más común en sistemas modernos)
+                html = html_bytes.decode('utf-8', errors='strict')
+                logger.debug("HTML decodificado como UTF-8")
+            except UnicodeDecodeError:
+                # Si falla UTF-8, intentar ISO-8859-1
+                html = html_bytes.decode('iso-8859-1', errors='replace')
+                logger.debug("HTML decodificado como ISO-8859-1")
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
@@ -268,22 +278,17 @@ class UnivalleScraper:
     
     def extraer_texto_de_celda(self, celda_html: str) -> str:
         """Extrae texto limpio de una celda."""
+        # Usar BeautifulSoup para extraer texto y decodificar entidades HTML automáticamente
+        from html import unescape
+        
+        # Remover tags HTML
         texto = re.sub(r'<[^>]+>', '', celda_html)
         
-        # Decodificar entidades HTML comunes
-        entidades = {
-            '&aacute;': 'á', '&Aacute;': 'Á',
-            '&eacute;': 'é', '&Eacute;': 'É',
-            '&iacute;': 'í', '&Iacute;': 'Í',
-            '&oacute;': 'ó', '&Oacute;': 'Ó',
-            '&uacute;': 'ú', '&Uacute;': 'Ú',
-            '&ntilde;': 'ñ', '&Ntilde;': 'Ñ',
-            '&amp;': '&', '&quot;': '"',
-            '&lt;': '<', '&gt;': '>', '&nbsp;': ' ',
-        }
+        # Decodificar entidades HTML automáticamente (&aacute; -> á, etc.)
+        texto = unescape(texto)
         
-        for entidad, caracter in entidades.items():
-            texto = texto.replace(entidad, caracter)
+        # Limpiar espacios no-breaking y otros caracteres especiales
+        texto = texto.replace('\xa0', ' ').replace('&nbsp;', ' ')
         
         return normalizar_texto(texto)
     
