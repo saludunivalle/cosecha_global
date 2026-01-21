@@ -395,10 +395,14 @@ class UnivalleScraper:
         # Buscar tabla anidada (los datos reales suelen estar en una tabla interna)
         tabla_interna = self._buscar_tabla_anidada(tabla_html)
         if tabla_interna:
-            logger.debug("Encontrada tabla anidada, usando tabla interna")
+            logger.info(f"🔍 Encontrada tabla anidada para {seccion_contexto}, extrayendo filas internas")
+            filas_antes = len(filas)
             filas = self.extraer_filas(tabla_interna)
+            logger.info(f"🔍 Filas antes: {filas_antes}, después de tabla anidada: {len(filas)}")
             if filas:
                 headers = self.extraer_celdas(filas[0])
+        else:
+            logger.debug(f"No se encontró tabla anidada para {seccion_contexto}, usando tabla original")
         
         # Si la tabla tiene muy pocas filas (solo wrapper/título), no procesarla
         # y mantener el contexto para la siguiente tabla
@@ -510,9 +514,9 @@ class UnivalleScraper:
             seccion_detectada = self._detectar_seccion_titulo(tabla_html)
             if seccion_detectada:
                 if seccion_actual:
-                    logger.warning(f"⚠️ Se detectó nueva sección '{seccion_detectada}' pero había contexto activo '{seccion_actual}' sin procesar")
+                    logger.warning(f"⚠️ Nueva sección '{seccion_detectada}' detectada, pero '{seccion_actual}' no procesó datos (solo wrappers)")
                 seccion_actual = seccion_detectada
-                logger.debug(f"Detectada sección: {seccion_actual}")
+                logger.info(f"📌 Detectada sección: {seccion_actual}")
                 continue  # Pasar a la siguiente tabla (que tendrá los datos)
             
             filas = self.extraer_filas(tabla_html)
