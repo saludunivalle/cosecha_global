@@ -1751,12 +1751,17 @@ class UnivalleScraper:
         """Procesa actividades de investigación."""
         actividades = []
         
+        logger.info(f"🔍 Procesando investigación - Filas recibidas: {len(filas)}")
+        
         # Buscar tabla anidada
         tabla_interna = self._buscar_tabla_anidada(tabla_html) or tabla_html
         filas_internas = self.extraer_filas(tabla_interna)
         
+        logger.info(f"🔍 Después de buscar tabla interna - Filas extraídas: {len(filas_internas)}")
+        
         if not filas_internas:
             filas_internas = filas
+            logger.info(f"⚠️ No hay filas internas, usando filas originales: {len(filas)}")
         
         # Buscar fila de headers - más flexible, no requiere CODIGO
         header_index = -1
@@ -1773,11 +1778,15 @@ class UnivalleScraper:
             if tiene_nombre_proyecto and tiene_horas:
                 header_index = i
                 headers_actuales = self.extraer_celdas(filas_internas[i])
-                logger.debug(f"Headers de investigación encontrados en fila {i}: {headers_actuales}")
+                logger.info(f"✓ Headers de investigación encontrados en fila {i}: {headers_actuales}")
                 break
         
         if header_index == -1:
-            logger.debug("No se encontró fila de headers para investigación")
+            logger.warning(f"❌ No se encontró fila de headers para investigación. Total filas revisadas: {min(10, len(filas_internas))}")
+            # Imprimir las primeras 3 filas para debugging
+            for i in range(min(3, len(filas_internas))):
+                fila_texto = self.extraer_texto_de_celda(filas_internas[i]).upper()
+                logger.debug(f"  Fila {i}: {fila_texto[:100]}")
             return actividades
         
         # Procesar filas de datos
@@ -1806,10 +1815,10 @@ class UnivalleScraper:
                         actividad.horas_semestre = valor
             
             if actividad.nombre_proyecto or actividad.horas_semestre:
-                logger.debug(f"Actividad de investigación encontrada: {actividad.nombre_proyecto} - {actividad.horas_semestre}h")
+                logger.info(f"  ✓ Investigación: '{actividad.nombre_proyecto}' - {actividad.horas_semestre}h")
                 actividades.append(actividad)
         
-        logger.debug(f"Total actividades de investigación procesadas: {len(actividades)}")
+        logger.info(f"📊 Total actividades de investigación procesadas: {len(actividades)}")
         return actividades
     
     def _procesar_tesis(
