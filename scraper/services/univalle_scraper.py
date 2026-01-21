@@ -1999,6 +1999,61 @@ class UnivalleScraper:
         
         logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, Inicio datos={inicio_datos}")
         
+        # Si hay categorías en la segunda fila, procesar por columnas (estructura matricial)
+        if categorias_segunda_fila:
+            logger.debug("📊 Procesando tabla con estructura matricial (categorías en fila 2)")
+            # En esta estructura, cada COLUMNA representa una actividad completa
+            # Recolectar todos los valores por columna primero
+            columnas_datos = {}
+            
+            for i in range(inicio_datos, len(filas)):
+                celdas = self.extraer_celdas(filas[i])
+                for j, celda in enumerate(celdas):
+                    if j not in columnas_datos:
+                        columnas_datos[j] = []
+                    celda_valor = celda.strip() if celda else ''
+                    if celda_valor:
+                        columnas_datos[j].append(celda_valor)
+            
+            # Procesar cada columna que tenga categoría
+            for j, categoria in enumerate(categorias_segunda_fila):
+                if not categoria:
+                    continue
+                
+                if j not in columnas_datos or not columnas_datos[j]:
+                    continue
+                
+                # En cada columna, buscar el nombre (texto) y las horas (número)
+                nombre_actividad = ''
+                horas_actividad = ''
+                
+                for valor in columnas_datos[j]:
+                    if re.match(r'^\d+\.?\d*$', valor):
+                        # Es un número, probablemente las horas
+                        horas_actividad = valor
+                    else:
+                        # Es texto, probablemente el nombre
+                        nombre_actividad = valor
+                
+                # Si encontramos ambos (nombre y horas), crear la actividad
+                if nombre_actividad and horas_actividad:
+                    actividad = {
+                        'PERIODO': id_periodo,
+                        'CATEGORIA': categoria,
+                        'Categoría': categoria,
+                        'NOMBRE': nombre_actividad,
+                        'Nombre': nombre_actividad,
+                        'HORAS SEMESTRE': horas_actividad,
+                        'Horas Semestre': horas_actividad,
+                    }
+                    actividades.append(actividad)
+                    logger.debug(f"  ✓ Actividad columna {j}: Categoría='{categoria}', Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+                else:
+                    logger.warning(f"  ⚠️ Columna {j} incompleta: Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+            
+            return actividades
+        
+        # Procesamiento normal (sin categorías en segunda fila)
         for i in range(inicio_datos, len(filas)):
             celdas = self.extraer_celdas(filas[i])
             
@@ -2014,25 +2069,6 @@ class UnivalleScraper:
                     header_norm = header.upper()
                     actividad[header] = valor
                     actividad[header_norm] = valor
-            
-            # Si hay categorías en segunda fila, asignar la categoría correspondiente
-            if categorias_segunda_fila:
-                # Buscar en qué columna hay datos para determinar la categoría
-                categoria = ''
-                for j, celda in enumerate(celdas):
-                    if celda and celda.strip() and j < len(categorias_segunda_fila):
-                        # Verificar que no sea solo el valor de horas
-                        celda_val = celda.strip()
-                        if not re.match(r'^\d+\.?\d*$', celda_val) or j == indice_nombre:
-                            # Si encontramos datos en esta columna, usar la categoría correspondiente
-                            if categorias_segunda_fila[j]:
-                                categoria = categorias_segunda_fila[j]
-                                break
-                
-                if categoria:
-                    actividad['CATEGORIA'] = categoria
-                    actividad['Categoría'] = categoria
-                    logger.debug(f"  Categoría asignada desde fila 2: '{categoria}'")
             
             # Extraer HORAS SEMESTRE usando índice identificado primero
             horas = ''
