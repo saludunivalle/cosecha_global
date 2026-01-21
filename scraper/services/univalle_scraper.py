@@ -351,8 +351,11 @@ class UnivalleScraper:
             return 'EXTENSION'
         if 'ACTIVIDADES ADMINISTRATIVAS' in texto and 'CARGO' not in texto:
             return 'ADMINISTRATIVAS'
-        if 'ACTIVIDADES COMPLEMENTARIAS' in texto and 'PARTICIPACION' not in texto:
-            return 'COMPLEMENTARIAS'
+        # ACTIVIDADES COMPLEMENTARIAS - puede tener o no PARTICIPACION EN
+        if 'ACTIVIDADES COMPLEMENTARIAS' in texto:
+            # Solo es título si NO tiene headers de datos como HORAS o columnas de categoría
+            if 'PARTICIPACION EN' not in texto or ('HORAS' not in texto):
+                return 'COMPLEMENTARIAS'
         if 'DOCENTE EN COMISION' in texto and 'TIPO DE COMISION' not in texto:
             return 'COMISION'
         
@@ -412,7 +415,12 @@ class UnivalleScraper:
             resultado.actividades_administrativas.extend(actividades)
         
         elif seccion_contexto == 'COMPLEMENTARIAS':
+            logger.info(f"🔵 Procesando sección COMPLEMENTARIAS con {len(filas)} filas")
+            logger.debug(f"Headers de complementarias: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Agregadas {len(actividades)} actividades complementarias (por contexto)")
+            for act in actividades:
+                logger.debug(f"  Complementaria: Categoría='{act.get('CATEGORIA', '')}', Nombre='{act.get('NOMBRE', '')}', Horas='{act.get('HORAS SEMESTRE', '')}'")
             resultado.actividades_complementarias.extend(actividades)
         
         elif seccion_contexto == 'COMISION':
@@ -1986,26 +1994,35 @@ class UnivalleScraper:
         
         if len(filas) > 1 and not es_tabla_comision:
             segunda_fila_celdas = self.extraer_celdas(filas[1])
-            # Verificar si la segunda fila contiene categorías típicas de complementarias
+            # Verificar si la segunda fila contiene SOLO categorías (no datos mezclados)
             categorias_conocidas = ['CLAUSTRO', 'REPRESENTANTE', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
                                    'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION', 'COMITE', 'CONSEJO']
             
             es_fila_categorias = False
+            categorias_encontradas = 0
+            total_celdas_no_vacias = 0
             
-            # Verificar si la segunda fila contiene categorías conocidas
+            # Verificar si TODAS las celdas no vacías son categorías conocidas
             for celda in segunda_fila_celdas:
                 celda_upper = celda.strip().upper() if celda else ''
-                if any(cat in celda_upper for cat in categorias_conocidas):
-                    es_fila_categorias = True
-                    break
+                if celda_upper:
+                    total_celdas_no_vacias += 1
+                    # Verificar que la celda sea EXACTAMENTE una categoría (no contiene texto adicional largo)
+                    # y NO sea un número (las horas no son categorías)
+                    if not re.match(r'^\d+\.?\d*$', celda_upper):
+                        for cat in categorias_conocidas:
+                            if cat in celda_upper and len(celda_upper) < 50:  # Categorías son cortas
+                                categorias_encontradas += 1
+                                break
             
-            # Si detectamos categorías en la segunda fila, usarla como categorías
-            if es_fila_categorias:
+            # Solo es fila de categorías si TODAS las celdas no vacías son categorías (no hay horas ni nombres largos)
+            if total_celdas_no_vacias > 0 and categorias_encontradas == total_celdas_no_vacias:
                 categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
                 inicio_datos = 2  # Los datos empiezan en la fila 2
+                es_fila_categorias = True
                 logger.info(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
             else:
-                logger.debug(f"❌ Segunda fila NO contiene categorías conocidas: {segunda_fila_celdas}")
+                logger.debug(f"❌ Segunda fila NO es fila de categorías (es datos normales): categorias_encontradas={categorias_encontradas}, total_celdas={total_celdas_no_vacias}")
         
         logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, Inicio datos={inicio_datos}")
         
