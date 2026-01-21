@@ -408,6 +408,10 @@ class UnivalleScraper:
         # y mantener el contexto para la siguiente tabla
         if len(filas) < 2:
             logger.info(f"⚠️ Tabla con contexto {seccion_contexto} tiene solo {len(filas)} fila(s), omitiendo y manteniendo contexto")
+            # Mostrar el contenido de la única fila para debug
+            if len(filas) == 1:
+                primera_celda_texto = self.extraer_texto_de_celda(filas[0])[:200]
+                logger.info(f"   Contenido fila única: '{primera_celda_texto}'")
             return False  # No limpiar contexto, procesar siguiente tabla
         
         if seccion_contexto == 'INVESTIGACION':
