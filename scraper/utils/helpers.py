@@ -51,6 +51,65 @@ def limpiar_cedula(cedula: str) -> str:
     return re.sub(r'[\s.\-]', '', str(cedula))
 
 
+def corregir_encoding_mal_interpretado(texto: str) -> str:
+    """
+    Corrige texto que fue decodificado incorrectamente.
+    
+    Patrones comunes cuando UTF-8 se interpreta como Windows-1252:
+    - Ã± → ñ
+    - Ã³ → ó
+    - Ã­ → í
+    - Ã¡ → á
+    - Ã© → é
+    - Ãº → ú
+    - Ã' → Ñ
+    - Ã" → Ó
+    - Ã → Í
+    - Ã → Á
+    - Ã‰ → É
+    - Ãš → Ú
+    
+    Args:
+        texto: Texto con encoding incorrecto
+        
+    Returns:
+        Texto corregido
+    """
+    if not texto:
+        return ''
+    
+    # Diccionario de correcciones comunes
+    correcciones = {
+        'Ã±': 'ñ',
+        'Ã³': 'ó',
+        'Ã­': 'í',
+        'Ã¡': 'á',
+        'Ã©': 'é',
+        'Ãº': 'ú',
+        'Ã'': 'Ñ',
+        'Ã"': 'Ó',
+        'Ã': 'Í',
+        'Ã': 'Á',
+        'Ã‰': 'É',
+        'Ãš': 'Ú',
+        # Variantes que aparecen
+        'ÃA': 'Ñ',
+        'ÃO': 'Ó',
+        'ÃI': 'Í',
+        'Ã'A': 'ÑA',
+    }
+    
+    texto_corregido = texto
+    for incorrecto, correcto in correcciones.items():
+        texto_corregido = texto_corregido.replace(incorrecto, correcto)
+    
+    # Patrón genérico: "Ã" seguido de letra mayúscula probablemente es un acento
+    # CIRUGÃA → CIRUGÍA (Ã + A → ÍA)
+    texto_corregido = re.sub(r'Ã([AEIOU])', lambda m: 'Í' + m.group(1), texto_corregido)
+    
+    return texto_corregido
+
+
 def normalizar_texto(texto: str) -> str:
     """
     Normaliza texto removiendo espacios extra y caracteres especiales.
@@ -63,6 +122,9 @@ def normalizar_texto(texto: str) -> str:
     """
     if not texto:
         return ''
+    
+    # Primero corregir encoding mal interpretado
+    texto = corregir_encoding_mal_interpretado(texto)
     
     # Remover espacios múltiples
     texto = ' '.join(texto.split())
