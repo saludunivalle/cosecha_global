@@ -343,8 +343,11 @@ class UnivalleScraper:
                 return 'PREGRADO'
         
         # Detectar tablas que son solo títulos de sección (otras actividades)
-        if 'ACTIVIDADES DE INVESTIGACION' in texto and 'APROBADO' not in texto:
-            return 'INVESTIGACION'
+        # INVESTIGACION - puede tener o no APROBADO POR
+        if 'ACTIVIDADES DE INVESTIGACION' in texto:
+            # Solo es título si NO tiene headers de datos como NOMBRE DEL o HORAS
+            if 'APROBADO' not in texto or ('HORAS' not in texto):
+                return 'INVESTIGACION'
         if ('ACTIVIDADES INTELECTUALES' in texto or 'ARTISTICAS' in texto) and 'APROBADO' not in texto:
             return 'INTELECTUALES'
         if 'ACTIVIDADES DE EXTENSION' in texto and 'TIPO' not in texto:
@@ -395,11 +398,15 @@ class UnivalleScraper:
                 headers = self.extraer_celdas(filas[0])
         
         if seccion_contexto == 'INVESTIGACION':
+            logger.info(f"🔵 Procesando sección INVESTIGACION con {len(filas)} filas")
+            logger.debug(f"Headers de investigación: {headers}")
             investigacion = self._procesar_investigacion(
                 tabla_html, filas, headers, id_periodo
             )
+            logger.info(f"✓ Agregadas {len(investigacion)} actividades de investigación (por contexto)")
+            for act in investigacion:
+                logger.debug(f"  Investigación: Nombre='{act.nombre_proyecto if hasattr(act, 'nombre_proyecto') else 'N/A'}', Horas='{act.horas_semestre if hasattr(act, 'horas_semestre') else 'N/A'}'") 
             resultado.actividades_investigacion.extend(investigacion)
-            logger.debug(f"Agregadas {len(investigacion)} actividades de investigación")
         
         elif seccion_contexto == 'INTELECTUALES':
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
