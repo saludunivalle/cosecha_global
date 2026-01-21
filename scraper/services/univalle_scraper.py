@@ -1,6 +1,11 @@
 """
 Servicio de scraping del portal Univalle
 Basado en la lógica documentada en docs/SCRAPING_UNIVALLE_PYTHON.md
+
+MAPEO DE DEPARTAMENTOS A ESCUELAS (implementado en helpers.determinar_escuela_desde_departamento):
+- Ciencias Fisiológicas, Microbiología, Morfología → Ciencias Básicas
+- Cirugía, Medicina Interna, Medicina Familiar, Medicina Física y Rehabilitación,
+  Psiquiatría, Patología, Anestesiología, Obstetricia y Ginecología, Pediatría → Medicina
 """
 
 import re
@@ -37,6 +42,7 @@ from scraper.utils.helpers import (
     deduplicar_actividades,
     parsear_periodo_label,
     formatear_nombre_completo,
+    determinar_escuela_desde_departamento,
 )
 
 logger = logging.getLogger(__name__)
@@ -337,16 +343,22 @@ class UnivalleScraper:
                 return 'PREGRADO'
         
         # Detectar tablas que son solo títulos de sección (otras actividades)
-        if 'ACTIVIDADES DE INVESTIGACION' in texto and 'APROBADO' not in texto:
-            return 'INVESTIGACION'
+        # INVESTIGACION - puede tener o no APROBADO POR
+        if 'ACTIVIDADES DE INVESTIGACION' in texto:
+            # Solo es título si NO tiene headers de datos como NOMBRE DEL o HORAS
+            if 'APROBADO' not in texto or ('HORAS' not in texto):
+                return 'INVESTIGACION'
         if ('ACTIVIDADES INTELECTUALES' in texto or 'ARTISTICAS' in texto) and 'APROBADO' not in texto:
             return 'INTELECTUALES'
         if 'ACTIVIDADES DE EXTENSION' in texto and 'TIPO' not in texto:
             return 'EXTENSION'
         if 'ACTIVIDADES ADMINISTRATIVAS' in texto and 'CARGO' not in texto:
             return 'ADMINISTRATIVAS'
-        if 'ACTIVIDADES COMPLEMENTARIAS' in texto and 'PARTICIPACION' not in texto:
-            return 'COMPLEMENTARIAS'
+        # ACTIVIDADES COMPLEMENTARIAS - puede tener o no PARTICIPACION EN
+        if 'ACTIVIDADES COMPLEMENTARIAS' in texto:
+            # Solo es título si NO tiene headers de datos como HORAS o columnas de categoría
+            if 'PARTICIPACION EN' not in texto or ('HORAS' not in texto):
+                return 'COMPLEMENTARIAS'
         if 'DOCENTE EN COMISION' in texto and 'TIPO DE COMISION' not in texto:
             return 'COMISION'
         
@@ -360,7 +372,7 @@ class UnivalleScraper:
         id_periodo: int,
         seccion_contexto: str,
         resultado: DatosDocente
-    ):
+    ) -> bool:
         """
         Procesa una tabla de datos usando el contexto de la sección anterior.
         
@@ -374,40 +386,87 @@ class UnivalleScraper:
             id_periodo: ID del período
             seccion_contexto: Tipo de sección (INVESTIGACION, INTELECTUALES, etc.)
             resultado: Objeto donde guardar los resultados
+            
+        Returns:
+            True si la tabla fue procesada exitosamente, False si debe mantenerse el contexto
         """
         logger.debug(f"Procesando tabla con contexto de sección: {seccion_contexto}")
         
         # Buscar tabla anidada (los datos reales suelen estar en una tabla interna)
         tabla_interna = self._buscar_tabla_anidada(tabla_html)
         if tabla_interna:
-            logger.debug("Encontrada tabla anidada, usando tabla interna")
+            logger.info(f"🔍 Encontrada tabla anidada para {seccion_contexto}, extrayendo filas internas")
+            filas_antes = len(filas)
             filas = self.extraer_filas(tabla_interna)
+            logger.info(f"🔍 Filas antes: {filas_antes}, después de tabla anidada: {len(filas)}")
             if filas:
                 headers = self.extraer_celdas(filas[0])
+        else:
+            logger.debug(f"No se encontró tabla anidada para {seccion_contexto}, usando tabla original")
+        
+        # Si la tabla tiene muy pocas filas (solo wrapper/título), no procesarla
+        # y mantener el contexto para la siguiente tabla
+        if len(filas) < 2:
+            logger.info(f"⚠️ Tabla con contexto {seccion_contexto} tiene solo {len(filas)} fila(s), omitiendo y manteniendo contexto")
+            # Mostrar el contenido de la única fila para debug
+            if len(filas) == 1:
+                primera_celda_texto = self.extraer_texto_de_celda(filas[0])[:200]
+                logger.info(f"   Contenido fila única: '{primera_celda_texto}'")
+            return False  # No limpiar contexto, procesar siguiente tabla
+        
+        # Si llegamos aquí, la tabla tiene 2+ filas
+        # Verificar si los headers/datos corresponden al contexto esperado
+        headers_texto = ' '.join(headers).upper()
+        primera_fila_texto = ' '.join([self.extraer_texto_de_celda(c) for c in self.extraer_celdas(filas[1]) if filas[1:]]).upper()
+        
+        # Para INVESTIGACION, verificar que realmente contenga datos de investigación
+        if seccion_contexto == 'INVESTIGACION':
+            # Verificar si tiene headers típicos de investigación
+            tiene_headers_investigacion = any(kw in headers_texto for kw in ['CODIGO', 'NOMBRE', 'PROYECTO', 'INVESTIGACION', 'APROBADO'])
+            
+            if not tiene_headers_investigacion:
+                logger.warning(f"⚠️ Tabla con contexto INVESTIGACION tiene {len(filas)} filas pero headers NO parecen de investigación")
+                logger.warning(f"   Headers: {headers}")
+                logger.warning(f"   Ignorando esta tabla y limpiando contexto INVESTIGACION")
+                return True  # Limpiar contexto porque esta tabla no es lo que esperábamos
         
         if seccion_contexto == 'INVESTIGACION':
+            logger.info(f"🔵 Procesando sección INVESTIGACION con {len(filas)} filas")
+            logger.debug(f"Headers de investigación: {headers}")
             investigacion = self._procesar_investigacion(
                 tabla_html, filas, headers, id_periodo
             )
+            logger.info(f"✓ Agregadas {len(investigacion)} actividades de investigación (por contexto)")
+            for act in investigacion:
+                logger.debug(f"  Investigación: Nombre='{act.nombre_proyecto if hasattr(act, 'nombre_proyecto') else 'N/A'}', Horas='{act.horas_semestre if hasattr(act, 'horas_semestre') else 'N/A'}'") 
             resultado.actividades_investigacion.extend(investigacion)
-            logger.debug(f"Agregadas {len(investigacion)} actividades de investigación")
+            return True
         
         elif seccion_contexto == 'INTELECTUALES':
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
             resultado.actividades_intelectuales.extend(actividades)
             logger.debug(f"Agregadas {len(actividades)} actividades intelectuales")
+            return True
         
         elif seccion_contexto == 'EXTENSION':
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
             resultado.actividades_extension.extend(actividades)
+            return True
         
         elif seccion_contexto == 'ADMINISTRATIVAS':
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
             resultado.actividades_administrativas.extend(actividades)
+            return True
         
         elif seccion_contexto == 'COMPLEMENTARIAS':
+            logger.info(f"🔵 Procesando sección COMPLEMENTARIAS con {len(filas)} filas")
+            logger.debug(f"Headers de complementarias: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Agregadas {len(actividades)} actividades complementarias (por contexto)")
+            for act in actividades:
+                logger.debug(f"  Complementaria: Categoría='{act.get('CATEGORIA', '')}', Nombre='{act.get('NOMBRE', '')}', Horas='{act.get('HORAS SEMESTRE', '')}'")
             resultado.actividades_complementarias.extend(actividades)
+            return True
         
         elif seccion_contexto == 'COMISION':
             logger.info(f"🔵 Procesando sección COMISION con {len(filas)} filas")
@@ -417,24 +476,30 @@ class UnivalleScraper:
             for act in actividades:
                 logger.debug(f"  Comisión: Categoría='{act.get('CATEGORIA', '')}', Descripción='{act.get('DESCRIPCION', '')}', Horas='{act.get('HORAS SEMESTRE', '')}')")
             resultado.docente_en_comision.extend(actividades)
+            return True
         
         elif seccion_contexto == 'PREGRADO':
             # Procesar asignaturas de pregrado usando la sección detectada
             actividades = self._procesar_asignaturas_con_seccion(filas, headers, id_periodo, 'pregrado')
             resultado.actividades_pregrado.extend(actividades)
             logger.debug(f"Agregadas {len(actividades)} actividades de PREGRADO")
+            return True
         
         elif seccion_contexto == 'POSTGRADO':
             # Procesar asignaturas de postgrado usando la sección detectada
             actividades = self._procesar_asignaturas_con_seccion(filas, headers, id_periodo, 'postgrado')
             resultado.actividades_postgrado.extend(actividades)
             logger.debug(f"Agregadas {len(actividades)} actividades de POSTGRADO")
+            return True
         
         elif seccion_contexto == 'TESIS':
             # Procesar dirección de tesis
             tesis = self._procesar_tesis(filas, headers, id_periodo)
             resultado.actividades_tesis.extend(tesis)
             logger.debug(f"Agregadas {len(tesis)} actividades de TESIS")
+            return True
+        
+        return True  # Por defecto, considerar procesado
     
     def procesar_docente(self, cedula: str, id_periodo: int) -> DatosDocente:
         """
@@ -453,9 +518,20 @@ class UnivalleScraper:
         
         html = self.obtener_html(cedula_limpia, id_periodo)
         
+        # TEMPORAL: Guardar HTML para debug
+        import os
+        html_file = os.path.abspath(f"debug_html_{cedula_limpia}_{id_periodo}.html")
+        try:
+            with open(html_file, 'w', encoding='utf-8') as f:
+                f.write(html)
+            logger.info(f"✅ HTML guardado en: {html_file}")
+        except Exception as e:
+            logger.error(f"❌ Error guardando HTML: {e}")
+        
         resultado = DatosDocente(periodo=id_periodo)
         
         tablas = self.extraer_tablas(html)
+        logger.info(f"📊 Total de tablas extraídas del HTML: {len(tablas)}")
         
         # Variable para guardar el contexto de la sección actual
         # Esto es necesario porque en el HTML de Univalle, los títulos de sección
@@ -463,17 +539,29 @@ class UnivalleScraper:
         seccion_actual = None
         
         for tabla_idx, tabla_html in enumerate(tablas, 1):
+            filas_count = len(self.extraer_filas(tabla_html))
+            logger.debug(f"📋 Tabla {tabla_idx}/{len(tablas)}: {filas_count} filas")
             logger.debug(f"Procesando tabla {tabla_idx}/{len(tablas)}")
             
             # Primero verificar si es una tabla de título de sección
             seccion_detectada = self._detectar_seccion_titulo(tabla_html)
             if seccion_detectada:
+                # Si hay un contexto activo, NO sobrescribirlo
+                # En lugar de eso, guardarlo para procesarlo después
+                if seccion_actual:
+                    logger.warning(f"⚠️ Nueva sección '{seccion_detectada}' detectada, pero '{seccion_actual}' sigue activo")
+                    logger.warning(f"⚠️ NO sobrescribiendo contexto. '{seccion_actual}' debe procesarse primero")
+                    # NO cambiar seccion_actual, dejar que la siguiente tabla (no-título) se procese con el contexto actual
+                    # Esta tabla de título se ignorará por ahora
+                    continue
                 seccion_actual = seccion_detectada
-                logger.debug(f"Detectada sección: {seccion_actual}")
+                logger.info(f"📌 Detectada sección: {seccion_actual}")
                 continue  # Pasar a la siguiente tabla (que tendrá los datos)
             
             filas = self.extraer_filas(tabla_html)
             if not filas:
+                if seccion_actual:
+                    logger.debug(f"Tabla sin filas encontrada con contexto '{seccion_actual}' activo")
                 continue
             
             headers = self.extraer_celdas(filas[0])
@@ -481,10 +569,19 @@ class UnivalleScraper:
             
             # Si tenemos contexto de sección, procesar con ese contexto
             if seccion_actual:
-                self._procesar_tabla_con_contexto(
+                # Logging detallado para diagnóstico
+                primera_celda = self.extraer_texto_de_celda(filas[0]) if len(filas) > 0 else ""
+                logger.info(f"📋 Tabla con contexto '{seccion_actual}': {len(filas)} filas, Primera celda: '{primera_celda[:100]}'")
+                logger.debug(f"Intentando procesar tabla con contexto '{seccion_actual}' - {len(filas)} filas, headers: {headers[:3] if len(headers) > 3 else headers}")
+                procesado = self._procesar_tabla_con_contexto(
                     tabla_html, filas, headers, id_periodo, seccion_actual, resultado
                 )
-                seccion_actual = None  # Limpiar el contexto después de usar
+                # Solo limpiar el contexto si la tabla fue procesada exitosamente
+                if procesado:
+                    logger.debug(f"Contexto '{seccion_actual}' procesado y limpiado")
+                    seccion_actual = None
+                else:
+                    logger.debug(f"Contexto '{seccion_actual}' se mantiene para siguiente tabla")
                 continue
             
             # Identificar y procesar según tipo (sin contexto previo)
@@ -528,8 +625,13 @@ class UnivalleScraper:
             f"Pregrado={len(resultado.actividades_pregrado)}, "
             f"Postgrado={len(resultado.actividades_postgrado)}, "
             f"Investigación={len(resultado.actividades_investigacion)}, "
-            f"Intelectuales={len(resultado.actividades_intelectuales)}"
+            f"Intelectuales={len(resultado.actividades_intelectuales)}, "
+            f"Complementarias={len(resultado.actividades_complementarias)}, "
+            f"Comisión={len(resultado.docente_en_comision)}"
         )
+        
+        if len(resultado.actividades_investigacion) == 0:
+            logger.warning(f"⚠️ ⚠️ ⚠️ NO se encontraron actividades de investigación para este docente")
         
         return resultado
     
@@ -563,16 +665,27 @@ class UnivalleScraper:
     def _es_tabla_investigacion(self, tabla_html: str, headers_upper: List[str]) -> bool:
         """Verifica si es tabla de investigación."""
         texto = self.extraer_texto_de_celda(tabla_html).upper()
+        headers_texto = ' '.join(headers_upper)
+        
         tiene_titulo = 'ACTIVIDADES DE INVESTIGACION' in texto
         # CODIGO es opcional - algunas tablas de investigación no lo tienen
-        tiene_nombre = ('NOMBRE DEL PROYECTO' in texto or
-                       'NOMBRE DEL ANTEPROYECTO' in texto or
-                       'PROPUESTA DE INVESTIGACION' in texto)
-        tiene_horas = 'HORAS SEMESTRE' in texto
-        tiene_aprobado = 'APROBADO' in texto
+        # Buscar tanto en el texto de la tabla como en los headers
+        tiene_nombre = (('NOMBRE DEL PROYECTO' in texto or
+                        'NOMBRE DEL ANTEPROYECTO' in texto or
+                        'PROPUESTA DE INVESTIGACION' in texto) or
+                       ('NOMBRE' in headers_texto and ('PROYECTO' in headers_texto or 'ANTEPROYECTO' in headers_texto)))
+        tiene_horas = 'HORAS SEMESTRE' in texto or 'HORAS' in headers_texto
+        tiene_aprobado = 'APROBADO' in texto or 'APROBADO' in headers_texto
         
-        # La tabla de investigación debe tener el título, nombre del proyecto/anteproyecto y horas
-        return tiene_titulo and tiene_nombre and tiene_horas
+        # La tabla de investigación debe tener: (título y nombre y horas) O (nombre y horas y aprobado)
+        es_investigacion = (tiene_titulo and tiene_nombre and tiene_horas) or (tiene_nombre and tiene_horas and tiene_aprobado)
+        
+        if es_investigacion:
+            logger.info(f"✅ DETECTADA tabla de investigación por headers!")
+            logger.info(f"   Headers: {headers_upper[:5]}")
+            logger.info(f"   tiene_nombre={tiene_nombre}, tiene_horas={tiene_horas}, tiene_aprobado={tiene_aprobado}")
+        
+        return es_investigacion
     
     def _es_tabla_tesis(self, headers_upper: List[str]) -> bool:
         """Verifica si es tabla de tesis."""
@@ -1191,7 +1304,18 @@ class UnivalleScraper:
         escuela_partes = [p for p in partes[1:] if p.upper() not in ["ESCUELA", "DEPARTAMENTO"]]
         escuela = " ".join(escuela_partes)
         
-        return departamento, escuela
+        # Limpiar departamento y escuela
+        departamento_limpio = limpiar_departamento(departamento)
+        escuela_limpia = limpiar_escuela(escuela)
+        
+        # Determinar escuela correcta basada en el departamento
+        escuela_desde_dept = determinar_escuela_desde_departamento(departamento_limpio)
+        
+        # Si se encontró una escuela basada en el departamento, usarla
+        if escuela_desde_dept:
+            escuela_limpia = escuela_desde_dept
+        
+        return departamento_limpio, escuela_limpia
     
     def _extraer_datos_personales_con_soup(self, html: str, info: InformacionPersonal) -> None:
         """
@@ -1244,10 +1368,12 @@ class UnivalleScraper:
                         if not info.apellido2:
                             info.apellido2 = valor
                     elif header == 'NOMBRE':
-                        # Permitir nombres con espacios, tildes, guiones, etc. Solo descartar si está vacío o es solo números
-                        #if not info.nombre and valor.isalpha():
-                        if not info.nombre and valor.isalpha():
-                            info.nombre = valor
+                        # Validación estricta para el campo NOMBRE esperado
+                        if not info.nombre and valor and len(valor) > 1 and not valor.isdigit():
+                            # Evitar capturar headers como "UNIDAD ACADEMICA"
+                            if 'UNIDAD' not in valor.upper() and 'ACADEMICA' not in valor.upper():
+                                info.nombre = valor
+                                logger.info(f"✅ NOMBRE encontrado en fila 2: '{valor}'")
                     elif 'UNIDAD' in header and 'ACADEMICA' in header:
                         if not info.unidad_academica:
                             info.unidad_academica = valor
@@ -1261,6 +1387,27 @@ class UnivalleScraper:
                         if not info.cargo:
                             info.cargo = valor
                             logger.info(f"CARGO encontrado en fila 2, columna {i}: '{valor}'")
+                
+                # Si no se encontró el nombre en la estructura normal, buscar en valores_fila2 directamente
+                # Según los logs, a veces el nombre está en valores_fila2 cuando headers está mal alineado
+                if not info.nombre and len(valores_fila2) >= 4:
+                    # Intentar encontrar el nombre en las posiciones típicas (después de apellidos)
+                    for idx, val in enumerate(valores_fila2):
+                        if val and len(val) > 1 and not val.isdigit():
+                            # Evitar capturar headers o campos conocidos
+                            val_upper = val.upper()
+                            if (val_upper not in ['CEDULA', 'DOCUMENTO', 'APELLIDO1', 'APELLIDO2', '1 APELLIDO', '2 APELLIDO', 'NOMBRE', 'UNIDAD ACADEMICA', 'ESCUELA', 'DEPARTAMENTO'] 
+                                and 'UNIDAD' not in val_upper 
+                                and 'ACADEMICA' not in val_upper
+                                and 'ESCUELA' not in val_upper
+                                and 'REHABILITACION' not in val_upper
+                                and idx >= 3):  # Buscar después de cédula y apellidos
+                                # Verificar que parece un nombre (tiene letras y posiblemente espacios)
+                                if any(c.isalpha() for c in val) and len(val.split()) <= 4:
+                                    info.nombre = val
+                                    logger.info(f"✅ NOMBRE encontrado en valores_fila2[{idx}]: '{val}'")
+                                    break
+                
                 # Procesar fila 4 si existe (vinculación, categoría, etc.)
                 if len(filas) > 3:
                     headers_fila3 = [c.get_text(strip=True).upper() for c in filas[2].find_all(['td', 'th'])]
@@ -1694,12 +1841,17 @@ class UnivalleScraper:
         """Procesa actividades de investigación."""
         actividades = []
         
+        logger.info(f"🔍 Procesando investigación - Filas recibidas: {len(filas)}")
+        
         # Buscar tabla anidada
         tabla_interna = self._buscar_tabla_anidada(tabla_html) or tabla_html
         filas_internas = self.extraer_filas(tabla_interna)
         
+        logger.info(f"🔍 Después de buscar tabla interna - Filas extraídas: {len(filas_internas)}")
+        
         if not filas_internas:
             filas_internas = filas
+            logger.info(f"⚠️ No hay filas internas, usando filas originales: {len(filas)}")
         
         # Buscar fila de headers - más flexible, no requiere CODIGO
         header_index = -1
@@ -1716,11 +1868,15 @@ class UnivalleScraper:
             if tiene_nombre_proyecto and tiene_horas:
                 header_index = i
                 headers_actuales = self.extraer_celdas(filas_internas[i])
-                logger.debug(f"Headers de investigación encontrados en fila {i}: {headers_actuales}")
+                logger.info(f"✓ Headers de investigación encontrados en fila {i}: {headers_actuales}")
                 break
         
         if header_index == -1:
-            logger.debug("No se encontró fila de headers para investigación")
+            logger.warning(f"❌ No se encontró fila de headers para investigación. Total filas revisadas: {min(10, len(filas_internas))}")
+            # Imprimir las primeras 3 filas para debugging
+            for i in range(min(3, len(filas_internas))):
+                fila_texto = self.extraer_texto_de_celda(filas_internas[i]).upper()
+                logger.debug(f"  Fila {i}: {fila_texto[:100]}")
             return actividades
         
         # Procesar filas de datos
@@ -1749,10 +1905,10 @@ class UnivalleScraper:
                         actividad.horas_semestre = valor
             
             if actividad.nombre_proyecto or actividad.horas_semestre:
-                logger.debug(f"Actividad de investigación encontrada: {actividad.nombre_proyecto} - {actividad.horas_semestre}h")
+                logger.info(f"  ✓ Investigación: '{actividad.nombre_proyecto}' - {actividad.horas_semestre}h")
                 actividades.append(actividad)
         
-        logger.debug(f"Total actividades de investigación procesadas: {len(actividades)}")
+        logger.info(f"📊 Total actividades de investigación procesadas: {len(actividades)}")
         return actividades
     
     def _procesar_tesis(
@@ -1861,8 +2017,14 @@ class UnivalleScraper:
         
         # Actividades complementarias
         if any('PARTICIPACION EN' in h for h in headers_upper):
+            logger.info(f"🔵 Detectada tabla ACTIVIDADES COMPLEMENTARIAS (por header 'PARTICIPACION EN')")
+            logger.debug(f"Headers: {headers}")
             actividades = self._procesar_actividades_genericas(filas, headers, id_periodo)
+            logger.info(f"✓ Procesadas {len(actividades)} actividades complementarias")
+            for act in actividades:
+                logger.debug(f"  Complementaria: Categoría='{act.get('CATEGORIA', '')}', Nombre='{act.get('NOMBRE', '')}', Horas='{act.get('HORAS SEMESTRE', '')}'")
             resultado.actividades_complementarias.extend(actividades)
+            return  # Evitar que caiga en otras condiciones
         
         # Docente en comisión
         elif any('TIPO DE COMISION' in h for h in headers_upper):
@@ -1938,27 +2100,93 @@ class UnivalleScraper:
         
         if len(filas) > 1 and not es_tabla_comision:
             segunda_fila_celdas = self.extraer_celdas(filas[1])
-            # Verificar si la segunda fila contiene categorías típicas de complementarias
-            categorias_conocidas = ['CLAUSTRO', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
-                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION']
+            # Verificar si la segunda fila contiene SOLO categorías (no datos mezclados)
+            categorias_conocidas = ['CLAUSTRO', 'REPRESENTANTE', 'COMITE O CONSEJO', 'ASISTENCIA A CLAUSTRO', 
+                                   'COMITE O CONSEJOS', 'ASISTENCIA A COMITE', 'PARTICIPACION', 'COMITE', 'CONSEJO']
             
             es_fila_categorias = False
+            categorias_encontradas = 0
+            total_celdas_no_vacias = 0
             
-            # Verificar si la segunda fila contiene categorías conocidas
+            # Verificar si TODAS las celdas no vacías son categorías conocidas
             for celda in segunda_fila_celdas:
                 celda_upper = celda.strip().upper() if celda else ''
-                if any(cat in celda_upper for cat in categorias_conocidas):
-                    es_fila_categorias = True
-                    break
+                if celda_upper:
+                    total_celdas_no_vacias += 1
+                    # Verificar que la celda sea EXACTAMENTE una categoría (no contiene texto adicional largo)
+                    # y NO sea un número (las horas no son categorías)
+                    if not re.match(r'^\d+\.?\d*$', celda_upper):
+                        for cat in categorias_conocidas:
+                            if cat in celda_upper and len(celda_upper) < 50:  # Categorías son cortas
+                                categorias_encontradas += 1
+                                break
             
-            # Si detectamos categorías en la segunda fila, usarla como categorías
-            if es_fila_categorias:
+            # Solo es fila de categorías si TODAS las celdas no vacías son categorías (no hay horas ni nombres largos)
+            if total_celdas_no_vacias > 0 and categorias_encontradas == total_celdas_no_vacias:
                 categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
                 inicio_datos = 2  # Los datos empiezan en la fila 2
-                logger.debug(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
+                es_fila_categorias = True
+                logger.info(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
+            else:
+                logger.debug(f"❌ Segunda fila NO es fila de categorías (es datos normales): categorias_encontradas={categorias_encontradas}, total_celdas={total_celdas_no_vacias}")
         
         logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, Inicio datos={inicio_datos}")
         
+        # Si hay categorías en la segunda fila, procesar por columnas (estructura matricial)
+        if categorias_segunda_fila:
+            logger.info(f"📊 Procesando tabla con estructura matricial (categorías en fila 2) - Total categorías: {len([c for c in categorias_segunda_fila if c])}")
+            # En esta estructura, cada COLUMNA representa una actividad completa
+            # Recolectar todos los valores por columna primero
+            columnas_datos = {}
+            
+            for i in range(inicio_datos, len(filas)):
+                celdas = self.extraer_celdas(filas[i])
+                for j, celda in enumerate(celdas):
+                    if j not in columnas_datos:
+                        columnas_datos[j] = []
+                    celda_valor = celda.strip() if celda else ''
+                    if celda_valor:
+                        columnas_datos[j].append(celda_valor)
+            
+            # Procesar cada columna que tenga categoría
+            for j, categoria in enumerate(categorias_segunda_fila):
+                if not categoria:
+                    continue
+                
+                if j not in columnas_datos or not columnas_datos[j]:
+                    continue
+                
+                # En cada columna, buscar el nombre (texto) y las horas (número)
+                nombre_actividad = ''
+                horas_actividad = ''
+                
+                for valor in columnas_datos[j]:
+                    if re.match(r'^\d+\.?\d*$', valor):
+                        # Es un número, probablemente las horas
+                        horas_actividad = valor
+                    else:
+                        # Es texto, probablemente el nombre
+                        nombre_actividad = valor
+                
+                # Si encontramos ambos (nombre y horas), crear la actividad
+                if nombre_actividad and horas_actividad:
+                    actividad = {
+                        'PERIODO': id_periodo,
+                        'CATEGORIA': categoria,
+                        'Categoría': categoria,
+                        'NOMBRE': nombre_actividad,
+                        'Nombre': nombre_actividad,
+                        'HORAS SEMESTRE': horas_actividad,
+                        'Horas Semestre': horas_actividad,
+                    }
+                    actividades.append(actividad)
+                    logger.debug(f"  ✓ Actividad columna {j}: Categoría='{categoria}', Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+                else:
+                    logger.warning(f"  ⚠️ Columna {j} incompleta: Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+            
+            return actividades
+        
+        # Procesamiento normal (sin categorías en segunda fila)
         for i in range(inicio_datos, len(filas)):
             celdas = self.extraer_celdas(filas[i])
             
@@ -1974,25 +2202,6 @@ class UnivalleScraper:
                     header_norm = header.upper()
                     actividad[header] = valor
                     actividad[header_norm] = valor
-            
-            # Si hay categorías en segunda fila, asignar la categoría correspondiente
-            if categorias_segunda_fila:
-                # Buscar en qué columna hay datos para determinar la categoría
-                categoria = ''
-                for j, celda in enumerate(celdas):
-                    if celda and celda.strip() and j < len(categorias_segunda_fila):
-                        # Verificar que no sea solo el valor de horas
-                        celda_val = celda.strip()
-                        if not re.match(r'^\d+\.?\d*$', celda_val) or j == indice_nombre:
-                            # Si encontramos datos en esta columna, usar la categoría correspondiente
-                            if categorias_segunda_fila[j]:
-                                categoria = categorias_segunda_fila[j]
-                                break
-                
-                if categoria:
-                    actividad['CATEGORIA'] = categoria
-                    actividad['Categoría'] = categoria
-                    logger.debug(f"  Categoría asignada desde fila 2: '{categoria}'")
             
             # Extraer HORAS SEMESTRE usando índice identificado primero
             horas = ''
@@ -2306,8 +2515,10 @@ class UnivalleScraper:
                     tiene_tablas = len(self.extraer_tablas(html)) < 2
                     if tiene_formulario and tiene_tablas:
                         raise ValueError("Página de login detectada - no se encontraron datos del docente")
-                    # No hay actividades para este docente/período - esto es normal, retornar lista vacía
+                    # No hay actividades para este docente/período
                     logger.info(f"ℹ️ Docente {cedula_limpia} sin actividades para el período {periodo_label}")
+                    # Si llegamos aquí y no hay actividades, significa que tampoco hay datos personales
+                    # (de lo contrario, _extraer_actividades_desde_html habría creado un registro base)
                     return []
                 
                 # Validaciones robustas de calidad de datos
@@ -2597,6 +2808,12 @@ class UnivalleScraper:
             if departamento_raw:
                 departamento = limpiar_departamento(departamento_raw)
                 logger.debug(f"Departamento (fallback): '{departamento_raw}' -> '{departamento}'")
+                
+                # Determinar escuela correcta basada en el departamento
+                escuela_desde_dept = determinar_escuela_desde_departamento(departamento)
+                if escuela_desde_dept:
+                    escuela = escuela_desde_dept
+                    logger.debug(f"Escuela determinada desde departamento: '{escuela}'")
         
         vinculacion = info.vinculacion or ''
         dedicacion = info.dedicacion or ''
@@ -2615,7 +2832,20 @@ class UnivalleScraper:
         logger.debug(f"Total actividades de PREGRADO: {len(datos_docente.actividades_pregrado)}")
         for actividad in datos_docente.actividades_pregrado:
             # Log para debug de cada actividad
-            logger.debug(f"  Pregrado - nombre_asignatura: '{actividad.nombre_asignatura}', horas_semestre: '{actividad.horas_semestre}'")
+            nombre_asig = (actividad.nombre_asignatura or '').strip()
+            logger.debug(f"  Pregrado - nombre_asignatura: '{nombre_asig}', horas_semestre: '{actividad.horas_semestre}'")
+            
+            # Filtrar actividades vacías o con títulos de sección
+            if not nombre_asig:
+                logger.debug(f"    ⚠️ Saltando actividad de pregrado sin nombre")
+                continue
+            
+            # Verificar que no sea un título de sección
+            nombre_upper = nombre_asig.upper()
+            if any(titulo in nombre_upper for titulo in ['ACTIVIDADES DE DOCENCIA', 'PREGRADO', 'POSTGRADO']):
+                logger.debug(f"    ⚠️ Saltando título de sección: '{nombre_asig}'")
+                continue
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2623,7 +2853,7 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Docencia',
                 categoria='Pregrado',
-                nombre_actividad=actividad.nombre_asignatura or '',
+                nombre_actividad=nombre_asig,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
@@ -2639,7 +2869,20 @@ class UnivalleScraper:
         logger.debug(f"Total actividades de POSTGRADO: {len(datos_docente.actividades_postgrado)}")
         for actividad in datos_docente.actividades_postgrado:
             # Log para debug de cada actividad
-            logger.debug(f"  Postgrado - nombre_asignatura: '{actividad.nombre_asignatura}', horas_semestre: '{actividad.horas_semestre}'")
+            nombre_asig = (actividad.nombre_asignatura or '').strip()
+            logger.debug(f"  Postgrado - nombre_asignatura: '{nombre_asig}', horas_semestre: '{actividad.horas_semestre}'")
+            
+            # Filtrar actividades vacías o con títulos de sección
+            if not nombre_asig:
+                logger.debug(f"    ⚠️ Saltando actividad de postgrado sin nombre")
+                continue
+            
+            # Verificar que no sea un título de sección
+            nombre_upper = nombre_asig.upper()
+            if any(titulo in nombre_upper for titulo in ['ACTIVIDADES DE DOCENCIA', 'PREGRADO', 'POSTGRADO']):
+                logger.debug(f"    ⚠️ Saltando título de sección: '{nombre_asig}'")
+                continue
+            
             actividades.append(self._construir_actividad_dict(
                 cedula=cedula,
                 nombre_profesor=nombre_completo,
@@ -2647,7 +2890,7 @@ class UnivalleScraper:
                 departamento=departamento,
                 tipo_actividad='Docencia',
                 categoria='Postgrado',
-                nombre_actividad=actividad.nombre_asignatura or '',
+                nombre_actividad=nombre_asig,
                 numero_horas=actividad.horas_semestre,
                 periodo=periodo_label,
                 actividad='ACTIVIDADES DE DOCENCIA',
@@ -2844,6 +3087,35 @@ class UnivalleScraper:
             ))
         
         logger.debug(f"Total actividades extraídas: {len(actividades)}")
+        
+        # Si no hay actividades pero sí hay información personal, crear un registro base
+        if len(actividades) == 0:
+            # Verificar que al menos tengamos algunos datos personales
+            tiene_datos_personales = (
+                nombre_completo and nombre_completo != 'No disponible'
+            ) or escuela or departamento or vinculacion
+            
+            if tiene_datos_personales:
+                logger.info(f"📝 No hay actividades pero sí datos personales - creando registro base para {cedula}")
+                actividades.append(self._construir_actividad_dict(
+                    cedula=cedula,
+                    nombre_profesor=nombre_completo,
+                    escuela=escuela,
+                    departamento=departamento,
+                    tipo_actividad='Sin actividades',
+                    categoria='Sin actividad',
+                    nombre_actividad='Sin actividades registradas',
+                    numero_horas='0',
+                    periodo=periodo_label,
+                    actividad='SIN ACTIVIDADES',
+                    vinculacion=vinculacion,
+                    dedicacion=dedicacion,
+                    nivel=nivel,
+                    cargo=cargo,
+                    departamento_original=departamento_original,
+                ))
+                logger.info(f"✓ Registro base creado con datos personales")
+        
         return actividades
     
     def _construir_actividad_dict(
@@ -2888,6 +3160,11 @@ class UnivalleScraper:
         # Limpiar escuela y departamento
         escuela_limpia = limpiar_escuela(escuela)
         departamento_limpio = limpiar_departamento(departamento)
+        
+        # Determinar escuela correcta basada en el departamento
+        escuela_desde_dept = determinar_escuela_desde_departamento(departamento_limpio)
+        if escuela_desde_dept:
+            escuela_limpia = escuela_desde_dept
         
         # Construir diccionario (todos los campos en orden correcto)
         actividad_dict = {
@@ -3007,8 +3284,17 @@ class UnivalleScraper:
         Returns:
             Nombre completo formateado
         """
-        return formatear_nombre_completo(
+        nombre_completo = formatear_nombre_completo(
             nombre=info.nombre,
             apellido1=info.apellido1,
             apellido2=info.apellido2
         )
+        
+        # Logging para debug si el nombre es 'No disponible'
+        if nombre_completo == 'No disponible':
+            logger.warning(
+                f"⚠️ Nombre completo 'No disponible' - "
+                f"Datos: nombre='{info.nombre}', apellido1='{info.apellido1}', apellido2='{info.apellido2}'"
+            )
+        
+        return nombre_completo
