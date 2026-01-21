@@ -414,6 +414,22 @@ class UnivalleScraper:
                 logger.info(f"   Contenido fila única: '{primera_celda_texto}'")
             return False  # No limpiar contexto, procesar siguiente tabla
         
+        # Si llegamos aquí, la tabla tiene 2+ filas
+        # Verificar si los headers/datos corresponden al contexto esperado
+        headers_texto = ' '.join(headers).upper()
+        primera_fila_texto = ' '.join([self.extraer_texto_de_celda(c) for c in self.extraer_celdas(filas[1]) if filas[1:]]).upper()
+        
+        # Para INVESTIGACION, verificar que realmente contenga datos de investigación
+        if seccion_contexto == 'INVESTIGACION':
+            # Verificar si tiene headers típicos de investigación
+            tiene_headers_investigacion = any(kw in headers_texto for kw in ['CODIGO', 'NOMBRE', 'PROYECTO', 'INVESTIGACION', 'APROBADO'])
+            
+            if not tiene_headers_investigacion:
+                logger.warning(f"⚠️ Tabla con contexto INVESTIGACION tiene {len(filas)} filas pero headers NO parecen de investigación")
+                logger.warning(f"   Headers: {headers}")
+                logger.warning(f"   Ignorando esta tabla y limpiando contexto INVESTIGACION")
+                return True  # Limpiar contexto porque esta tabla no es lo que esperábamos
+        
         if seccion_contexto == 'INVESTIGACION':
             logger.info(f"🔵 Procesando sección INVESTIGACION con {len(filas)} filas")
             logger.debug(f"Headers de investigación: {headers}")
