@@ -513,8 +513,14 @@ class UnivalleScraper:
             # Primero verificar si es una tabla de título de sección
             seccion_detectada = self._detectar_seccion_titulo(tabla_html)
             if seccion_detectada:
+                # Si hay un contexto activo, NO sobrescribirlo
+                # En lugar de eso, guardarlo para procesarlo después
                 if seccion_actual:
-                    logger.warning(f"⚠️ Nueva sección '{seccion_detectada}' detectada, pero '{seccion_actual}' no procesó datos (solo wrappers)")
+                    logger.warning(f"⚠️ Nueva sección '{seccion_detectada}' detectada, pero '{seccion_actual}' sigue activo")
+                    logger.warning(f"⚠️ NO sobrescribiendo contexto. '{seccion_actual}' debe procesarse primero")
+                    # NO cambiar seccion_actual, dejar que la siguiente tabla (no-título) se procese con el contexto actual
+                    # Esta tabla de título se ignorará por ahora
+                    continue
                 seccion_actual = seccion_detectada
                 logger.info(f"📌 Detectada sección: {seccion_actual}")
                 continue  # Pasar a la siguiente tabla (que tendrá los datos)
