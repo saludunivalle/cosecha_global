@@ -519,10 +519,14 @@ class UnivalleScraper:
         html = self.obtener_html(cedula_limpia, id_periodo)
         
         # TEMPORAL: Guardar HTML para debug
-        html_file = f"debug_html_{cedula_limpia}_{id_periodo}.html"
-        with open(html_file, 'w', encoding='utf-8') as f:
-            f.write(html)
-        logger.info(f"🔍 HTML guardado en: {html_file}")
+        import os
+        html_file = os.path.abspath(f"debug_html_{cedula_limpia}_{id_periodo}.html")
+        try:
+            with open(html_file, 'w', encoding='utf-8') as f:
+                f.write(html)
+            logger.info(f"✅ HTML guardado en: {html_file}")
+        except Exception as e:
+            logger.error(f"❌ Error guardando HTML: {e}")
         
         resultado = DatosDocente(periodo=id_periodo)
         
@@ -661,16 +665,27 @@ class UnivalleScraper:
     def _es_tabla_investigacion(self, tabla_html: str, headers_upper: List[str]) -> bool:
         """Verifica si es tabla de investigación."""
         texto = self.extraer_texto_de_celda(tabla_html).upper()
+        headers_texto = ' '.join(headers_upper)
+        
         tiene_titulo = 'ACTIVIDADES DE INVESTIGACION' in texto
         # CODIGO es opcional - algunas tablas de investigación no lo tienen
-        tiene_nombre = ('NOMBRE DEL PROYECTO' in texto or
-                       'NOMBRE DEL ANTEPROYECTO' in texto or
-                       'PROPUESTA DE INVESTIGACION' in texto)
-        tiene_horas = 'HORAS SEMESTRE' in texto
-        tiene_aprobado = 'APROBADO' in texto
+        # Buscar tanto en el texto de la tabla como en los headers
+        tiene_nombre = (('NOMBRE DEL PROYECTO' in texto or
+                        'NOMBRE DEL ANTEPROYECTO' in texto or
+                        'PROPUESTA DE INVESTIGACION' in texto) or
+                       ('NOMBRE' in headers_texto and ('PROYECTO' in headers_texto or 'ANTEPROYECTO' in headers_texto)))
+        tiene_horas = 'HORAS SEMESTRE' in texto or 'HORAS' in headers_texto
+        tiene_aprobado = 'APROBADO' in texto or 'APROBADO' in headers_texto
         
-        # La tabla de investigación debe tener el título, nombre del proyecto/anteproyecto y horas
-        return tiene_titulo and tiene_nombre and tiene_horas
+        # La tabla de investigación debe tener: (título y nombre y horas) O (nombre y horas y aprobado)
+        es_investigacion = (tiene_titulo and tiene_nombre and tiene_horas) or (tiene_nombre and tiene_horas and tiene_aprobado)
+        
+        if es_investigacion:
+            logger.info(f"✅ DETECTADA tabla de investigación por headers!")
+            logger.info(f"   Headers: {headers_upper[:5]}")
+            logger.info(f"   tiene_nombre={tiene_nombre}, tiene_horas={tiene_horas}, tiene_aprobado={tiene_aprobado}")
+        
+        return es_investigacion
     
     def _es_tabla_tesis(self, headers_upper: List[str]) -> bool:
         """Verifica si es tabla de tesis."""
