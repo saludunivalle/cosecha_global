@@ -191,19 +191,19 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # CRÍTICO: Intentar decodificación automática primero, luego forzar UTF-8
-            # El portal puede enviar UTF-8 sin declararlo correctamente
+            # CRÍTICO: El portal Univalle usa Windows-1252 (Latin-1 extendido)
+            # No usar UTF-8 porque los bytes se interpretarán incorrectamente
             html_bytes = response.content
             
-            # Intentar detectar encoding del HTML
+            # Forzar Windows-1252 que es compatible con ISO-8859-1 pero maneja mejor
+            # caracteres especiales españoles (Á, É, Í, Ó, Ú, Ñ)
             try:
-                # Primero intentar UTF-8 (más común en sistemas modernos)
-                html = html_bytes.decode('utf-8', errors='strict')
-                logger.debug("HTML decodificado como UTF-8")
-            except UnicodeDecodeError:
-                # Si falla UTF-8, intentar ISO-8859-1
+                html = html_bytes.decode('windows-1252', errors='replace')
+                logger.debug("HTML decodificado como Windows-1252")
+            except Exception:
+                # Fallback a ISO-8859-1 si windows-1252 falla
                 html = html_bytes.decode('iso-8859-1', errors='replace')
-                logger.debug("HTML decodificado como ISO-8859-1")
+                logger.debug("HTML decodificado como ISO-8859-1 (fallback)")
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")
