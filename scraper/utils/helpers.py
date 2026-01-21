@@ -51,6 +51,57 @@ def limpiar_cedula(cedula: str) -> str:
     return re.sub(r'[\s.\-]', '', str(cedula))
 
 
+def corregir_encoding_mal_interpretado(texto: str) -> str:
+    """
+    Corrige texto que fue decodificado incorrectamente.
+    Patrones comunes cuando UTF-8 se interpreta como Windows-1252.
+    
+    Args:
+        texto: Texto con encoding incorrecto
+        
+    Returns:
+        Texto corregido
+    """
+    if not texto:
+        return ''
+    
+    # Mapeo de bytes UTF-8 mal interpretados como Windows-1252
+    # Usar códigos unicode para evitar problemas de encoding en el código fuente
+    correcciones = [
+        ('\xc3\xb1', 'ñ'),  # ñ
+        ('\xc3\xb3', 'ó'),  # ó
+        ('\xc3\xad', 'í'),  # í
+        ('\xc3\xa1', 'á'),  # á
+        ('\xc3\xa9', 'é'),  # é
+        ('\xc3\xba', 'ú'),  # ú
+        ('\xc3\x91', 'Ñ'),  # Ñ
+        ('\xc3\x93', 'Ó'),  # Ó
+        ('\xc3\x8d', 'Í'),  # Í
+        ('\xc3\x81', 'Á'),  # Á
+        ('\xc3\x89', 'É'),  # É
+        ('\xc3\x9a', 'Ú'),  # Ú
+    ]
+    
+    texto_corregido = texto
+    for incorrecto, correcto in correcciones:
+        texto_corregido = texto_corregido.replace(incorrecto, correcto)
+    
+    # Patrón adicional: "Ã" + vocal mayúscula
+    # CIRUGÃA -> CIRUGÍA
+    import re
+    patron_vocal = {
+        'A': 'ÍA',
+        'E': 'ÍE',
+        'I': 'ÍI',
+        'O': 'ÍO',
+        'U': 'ÍU',
+    }
+    for vocal, reemplazo in patron_vocal.items():
+        texto_corregido = texto_corregido.replace('Ã' + vocal, reemplazo)
+    
+    return texto_corregido
+
+
 def normalizar_texto(texto: str) -> str:
     """
     Normaliza texto removiendo espacios extra y caracteres especiales.
@@ -63,6 +114,9 @@ def normalizar_texto(texto: str) -> str:
     """
     if not texto:
         return ''
+    
+    # Primero corregir encoding mal interpretado
+    texto = corregir_encoding_mal_interpretado(texto)
     
     # Remover espacios múltiples
     texto = ' '.join(texto.split())
@@ -438,7 +492,7 @@ def sanitizar_valor_hoja(valor: Any) -> str:
         valor: Valor a sanitizar
         
     Returns:
-        String sanitizado
+        String sanitizado con codificación correcta
     """
     if valor is None:
         return ''
@@ -447,10 +501,14 @@ def sanitizar_valor_hoja(valor: Any) -> str:
         return str(valor)
     
     if isinstance(valor, str):
-        # Limitar longitud (Google Sheets tiene límite por celda)
-        valor = valor[:50000]
-        # Remover caracteres problemáticos
+        # Asegurar que la cadena esté correctamente codificada
+        # Si viene de ISO-8859-1, ya debería estar decodificada correctamente
+        # Solo limpiamos caracteres de control problemáticos
+        valor = valor[:50000]  # Limitar longitud
         valor = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', valor)
+        # Asegurar que sea una string UTF-8 válida
+        if isinstance(valor, bytes):
+            valor = valor.decode('utf-8', errors='replace')
         return valor
     
     return str(valor)
