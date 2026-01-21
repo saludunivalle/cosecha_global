@@ -521,6 +521,7 @@ class UnivalleScraper:
         resultado = DatosDocente(periodo=id_periodo)
         
         tablas = self.extraer_tablas(html)
+        logger.info(f"📊 Total de tablas extraídas del HTML: {len(tablas)}")
         
         # Variable para guardar el contexto de la sección actual
         # Esto es necesario porque en el HTML de Univalle, los títulos de sección
@@ -528,6 +529,8 @@ class UnivalleScraper:
         seccion_actual = None
         
         for tabla_idx, tabla_html in enumerate(tablas, 1):
+            filas_count = len(self.extraer_filas(tabla_html))
+            logger.debug(f"📋 Tabla {tabla_idx}/{len(tablas)}: {filas_count} filas")
             logger.debug(f"Procesando tabla {tabla_idx}/{len(tablas)}")
             
             # Primero verificar si es una tabla de título de sección
