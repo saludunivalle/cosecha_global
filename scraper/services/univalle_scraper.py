@@ -191,9 +191,9 @@ class UnivalleScraper:
             )
             response.raise_for_status()
             
-            # CRÍTICO: Decodificar como ISO-8859-1
-            response.encoding = 'iso-8859-1'
-            html = response.text
+            # CRÍTICO: Obtener bytes y decodificar explícitamente como ISO-8859-1
+            html_bytes = response.content
+            html = html_bytes.decode('iso-8859-1', errors='replace')
             
             if len(html) < 100:
                 raise ValueError("Respuesta vacía o muy corta del servidor")

@@ -438,7 +438,7 @@ def sanitizar_valor_hoja(valor: Any) -> str:
         valor: Valor a sanitizar
         
     Returns:
-        String sanitizado
+        String sanitizado con codificación correcta
     """
     if valor is None:
         return ''
@@ -447,10 +447,14 @@ def sanitizar_valor_hoja(valor: Any) -> str:
         return str(valor)
     
     if isinstance(valor, str):
-        # Limitar longitud (Google Sheets tiene límite por celda)
-        valor = valor[:50000]
-        # Remover caracteres problemáticos
+        # Asegurar que la cadena esté correctamente codificada
+        # Si viene de ISO-8859-1, ya debería estar decodificada correctamente
+        # Solo limpiamos caracteres de control problemáticos
+        valor = valor[:50000]  # Limitar longitud
         valor = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', valor)
+        # Asegurar que sea una string UTF-8 válida
+        if isinstance(valor, bytes):
+            valor = valor.decode('utf-8', errors='replace')
         return valor
     
     return str(valor)
