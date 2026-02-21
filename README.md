@@ -91,7 +91,7 @@ python main.py --modo completo \
 
 O usando Github Actions
 
-###### Corrección de fallo en ejecución
+#### Corrección de fallo en ejecución
 
 Ir al repositorio del proyecto, acceder a la pestaña de Actions, en la parte izquierda estaran los workflows(Automatizaciones) de la cosecha, ingresar a 2025-2 y 2026-1 y en cada uno ir a la parte derecha donde está la opcion Run workflow, dar click y se abre una pequeña ventana, dar click en el boton verde de Run workflow y esperar aproximandamente 23 minutos a que se termine de ejecutar la automatización.
 
