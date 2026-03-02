@@ -1351,7 +1351,10 @@ class UnivalleScraper:
                 cargos_posibles = ['AUXILIAR', 'ASISTENTE', 'ASOCIADO', 'NOMBRADO', 'TITULAR']
                 for cargo in cargos_posibles:
                     if cargo in headers_fila1 and not info.cargo:
-                        info.cargo = cargo
+                        if cargo == 'NOMBRADO':
+                            info.cargo = 'TITULAR'
+                        else:    
+                            info.cargo = cargo
                         logger.info(f"✅ CARGO detectado en headers fila 2: {cargo}")
                         break
                 
@@ -1390,7 +1393,10 @@ class UnivalleScraper:
                             info.departamento = valor
                     elif 'CARGO' in header:
                         if not info.cargo:
-                            info.cargo = valor
+                            if valor.strip().upper() == 'NOMBRADO':
+                                info.cargo = 'NOMBRADO'
+                            else:
+                                info.cargo = 'TITULAR'
                             logger.info(f"CARGO encontrado en fila 2, columna {i}: '{valor}'")
                 
                 # Si no se encontró el nombre en la estructura normal, buscar en valores_fila2 directamente
