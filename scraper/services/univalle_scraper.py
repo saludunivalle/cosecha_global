@@ -1351,7 +1351,10 @@ class UnivalleScraper:
                 cargos_posibles = ['AUXILIAR', 'ASISTENTE', 'ASOCIADO', 'NOMBRADO', 'TITULAR']
                 for cargo in cargos_posibles:
                     if cargo in headers_fila1 and not info.cargo:
-                        info.cargo = cargo
+                        if cargo == 'NOMBRADO':
+                            info.cargo = 'TITULAR'
+                        else:    
+                            info.cargo = cargo
                         logger.info(f"✅ CARGO detectado en headers fila 2: {cargo}")
                         break
                 
