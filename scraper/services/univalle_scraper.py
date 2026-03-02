@@ -1393,7 +1393,10 @@ class UnivalleScraper:
                             info.departamento = valor
                     elif 'CARGO' in header:
                         if not info.cargo:
-                            info.cargo = valor
+                            if valor.strip().upper() == 'NOMBRADO':
+                                info.cargo = 'NOMBRADO'
+                            else:
+                                info.cargo = 'TITULAR'
                             logger.info(f"CARGO encontrado en fila 2, columna {i}: '{valor}'")
                 
                 # Si no se encontró el nombre en la estructura normal, buscar en valores_fila2 directamente
