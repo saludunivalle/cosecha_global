@@ -11,7 +11,7 @@ on:
       source_worksheet:
         description: 'Hoja fuente (worksheet)'
         required: false
-        default: '2025-2'
+        default: '2024-2'
       source_column:
         description: 'Columna de cédulas'
         required: false
@@ -130,7 +130,7 @@ jobs:
             --source-sheet-url "$SHEET_URL_SOURCE" \
             --target-sheet-url "$SHEET_URL_TARGET" \
             --target-period "$TARGET_PERIOD" \
-            --source-worksheet "${{ inputs.source_worksheet || '2025-2' }}" \
+            --source-worksheet "${{ inputs.source_worksheet || '2024-2' }}" \
             --source-column "${{ inputs.source_column || 'D' }}" \
             --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}
         continue-on-error: true
