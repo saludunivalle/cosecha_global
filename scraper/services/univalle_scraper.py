@@ -2075,6 +2075,8 @@ class UnivalleScraper:
         indice_titulo = -1
         indice_cargo = -1
         indice_descripcion = -1
+        indice_participacion = -1  # Para actividades complementarias
+        indice_tipo_comision = -1  # Para comisiones
         categorias_segunda_fila = []
         inicio_datos = 1  # Por defecto, los datos empiezan en fila 1
         
@@ -2097,6 +2099,16 @@ class UnivalleScraper:
                     indice_nombre = j
                     logger.debug(f"✓ Columna NOMBRE identificada: índice {j}, header: '{header}'")
             
+            # Identificar columna PARTICIPACION EN (para actividades complementarias)
+            if 'PARTICIPACION EN' in header_upper:
+                indice_participacion = j
+                logger.debug(f"✓ Columna PARTICIPACION EN identificada: índice {j}, header: '{header}'")
+            
+            # Identificar columna TIPO DE COMISION (para comisiones)
+            if 'TIPO DE COMISION' in header_upper or ('TIPO' in header_upper and 'COMISION' in header_upper):
+                indice_tipo_comision = j
+                logger.debug(f"✓ Columna TIPO DE COMISION identificada: índice {j}, header: '{header}'")
+            
             # Otras columnas
             if 'TITULO' in header_upper:
                 indice_titulo = j
@@ -2107,7 +2119,7 @@ class UnivalleScraper:
         
         # Detectar si la segunda fila contiene categorías (solo para actividades complementarias)
         # Para COMISION, la categoría está en una columna normal, NO en una fila separada
-        es_tabla_comision = any('TIPO DE COMISION' in h.upper() or ('TIPO' in h.upper() and 'COMISION' in h.upper()) for h in headers)
+        es_tabla_comision = (indice_tipo_comision >= 0)
         
         if len(filas) > 1 and not es_tabla_comision:
             segunda_fila_celdas = self.extraer_celdas(filas[1])
@@ -2118,30 +2130,66 @@ class UnivalleScraper:
             es_fila_categorias = False
             categorias_encontradas = 0
             total_celdas_no_vacias = 0
+            celdas_con_texto_largo = 0
+            celdas_con_numeros = 0
             
-            # Verificar si TODAS las celdas no vacías son categorías conocidas
+            # Verificar si la mayoría de celdas no vacías son categorías conocidas
             for celda in segunda_fila_celdas:
                 celda_upper = celda.strip().upper() if celda else ''
                 if celda_upper:
                     total_celdas_no_vacias += 1
-                    # Verificar que la celda sea EXACTAMENTE una categoría (no contiene texto adicional largo)
-                    # y NO sea un número (las horas no son categorías)
-                    if not re.match(r'^\d+\.?\d*$', celda_upper):
-                        for cat in categorias_conocidas:
-                            if cat in celda_upper and len(celda_upper) < 50:  # Categorías son cortas
-                                categorias_encontradas += 1
-                                break
+                    
+                    # Verificar si es un número (probablemente horas, no categoría)
+                    if re.match(r'^\d+\.?\d*$', celda_upper):
+                        celdas_con_numeros += 1
+                        logger.debug(f"  Celda con número detectada: '{celda_upper}'")
+                        continue
+                    
+                    # Verificar si es texto muy largo (probablemente nombre de actividad, no categoría)
+                    if len(celda_upper) > 50:
+                        celdas_con_texto_largo += 1
+                        logger.debug(f"  Celda con texto largo detectada: '{celda_upper[:30]}...'")
+                        continue
+                    
+                    # Verificar si coincide con alguna categoría conocida
+                    for cat in categorias_conocidas:
+                        if cat in celda_upper:
+                            categorias_encontradas += 1
+                            logger.debug(f"  Categoría encontrada: '{celda_upper}' (coincide con '{cat}')")
+                            break
             
-            # Solo es fila de categorías si TODAS las celdas no vacías son categorías (no hay horas ni nombres largos)
-            if total_celdas_no_vacias > 0 and categorias_encontradas == total_celdas_no_vacias:
-                categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
-                inicio_datos = 2  # Los datos empiezan en la fila 2
-                es_fila_categorias = True
-                logger.info(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
-            else:
-                logger.debug(f"❌ Segunda fila NO es fila de categorías (es datos normales): categorias_encontradas={categorias_encontradas}, total_celdas={total_celdas_no_vacias}")
+            # Es fila de categorías si:
+            # 1. Hay al menos una categoría encontrada
+            # 2. No hay números (las horas van en filas posteriores)
+            # 3. No hay texto muy largo (los nombres van en filas posteriores)
+            # 4. Al menos el 50% de las celdas no vacías son categorías
+            if total_celdas_no_vacias > 0:
+                porcentaje_categorias = (categorias_encontradas / total_celdas_no_vacias) * 100
+                logger.debug(
+                    f"Análisis de segunda fila: {categorias_encontradas}/{total_celdas_no_vacias} categorías ({porcentaje_categorias:.1f}%), "
+                    f"{celdas_con_numeros} números, {celdas_con_texto_largo} textos largos"
+                )
+                
+                if (categorias_encontradas > 0 and 
+                    celdas_con_numeros == 0 and 
+                    celdas_con_texto_largo == 0 and 
+                    porcentaje_categorias >= 50):
+                    categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
+                    inicio_datos = 2  # Los datos empiezan en la fila 2
+                    es_fila_categorias = True
+                    logger.info(f"✓ Categorías detectadas en segunda fila ({porcentaje_categorias:.1f}%): {categorias_segunda_fila}")
+                else:
+                    logger.debug(
+                        f"❌ Segunda fila NO es fila de categorías: "
+                        f"categorias={categorias_encontradas}, numeros={celdas_con_numeros}, "
+                        f"largos={celdas_con_texto_largo}, porcentaje={porcentaje_categorias:.1f}%"
+                    )
         
-        logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, Inicio datos={inicio_datos}")
+        logger.debug(
+            f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, "
+            f"Participación={indice_participacion}, TipoComisión={indice_tipo_comision}, "
+            f"Inicio datos={inicio_datos}, Es comisión={es_tabla_comision}"
+        )
         
         # Si hay categorías en la segunda fila, procesar por columnas (estructura matricial)
         if categorias_segunda_fila:
@@ -2160,12 +2208,17 @@ class UnivalleScraper:
                         columnas_datos[j].append(celda_valor)
             
             # Procesar cada columna que tenga categoría
+            logger.info(f"🔍 Procesando {len([c for c in categorias_segunda_fila if c])} columnas con categorías...")
             for j, categoria in enumerate(categorias_segunda_fila):
                 if not categoria:
+                    logger.debug(f"  Columna {j}: Sin categoría, saltando")
                     continue
                 
                 if j not in columnas_datos or not columnas_datos[j]:
+                    logger.debug(f"  Columna {j} ('{categoria}'): Sin datos, saltando")
                     continue
+                
+                logger.debug(f"  Columna {j} ('{categoria}'): Procesando {len(columnas_datos[j])} valores: {columnas_datos[j]}")
                 
                 # En cada columna, buscar el nombre (texto) y las horas (número)
                 nombre_actividad = ''
@@ -2174,10 +2227,14 @@ class UnivalleScraper:
                 for valor in columnas_datos[j]:
                     if re.match(r'^\d+\.?\d*$', valor):
                         # Es un número, probablemente las horas
-                        horas_actividad = valor
+                        if not horas_actividad:  # Solo tomar el primero
+                            horas_actividad = valor
+                            logger.debug(f"    Horas encontradas: '{valor}'")
                     else:
                         # Es texto, probablemente el nombre
-                        nombre_actividad = valor
+                        if not nombre_actividad:  # Solo tomar el primero
+                            nombre_actividad = valor
+                            logger.debug(f"    Nombre encontrado: '{valor}'")
                 
                 # Si encontramos ambos (nombre y horas), crear la actividad
                 if nombre_actividad and horas_actividad:
@@ -2191,9 +2248,16 @@ class UnivalleScraper:
                         'Horas Semestre': horas_actividad,
                     }
                     actividades.append(actividad)
-                    logger.debug(f"  ✓ Actividad columna {j}: Categoría='{categoria}', Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+                    logger.info(f"  ✓ Actividad creada - Columna {j}: Categoría='{categoria}', Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+                elif nombre_actividad and not horas_actividad:
+                    # Si hay nombre pero no horas, intentar con horas = 0 o buscar en headers
+                    logger.warning(f"  ⚠️ Columna {j} ('{categoria}'): Tiene nombre pero no horas. Nombre='{nombre_actividad}'")
+                    # Buscar horas en la tabla original o en los valores no procesados
+                    # Por ahora, marcar como incompleta
+                elif horas_actividad and not nombre_actividad:
+                    logger.warning(f"  ⚠️ Columna {j} ('{categoria}'): Tiene horas pero no nombre. Horas='{horas_actividad}'")
                 else:
-                    logger.warning(f"  ⚠️ Columna {j} incompleta: Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+                    logger.warning(f"  ⚠️ Columna {j} ('{categoria}'): Incompleta - Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
             
             return actividades
         
@@ -2298,27 +2362,46 @@ class UnivalleScraper:
             if nombre and re.match(r'^\d+\.?\d*$', nombre):
                 logger.error(f"❌ ERROR: Nombre de actividad es un número '{nombre}' - las columnas están invertidas")
             
-            # Para tablas de comisión, extraer categoría de la columna TIPO DE COMISION
-            if es_tabla_comision and 'CATEGORIA' not in actividad:
-                # Buscar el índice de la columna TIPO DE COMISION
-                indice_tipo_comision = -1
-                for j, header in enumerate(headers):
-                    if 'TIPO DE COMISION' in header.upper() or 'TIPO' in header.upper():
-                        indice_tipo_comision = j
-                        break
-                
-                # Extraer categoría de esa columna
-                if indice_tipo_comision >= 0 and indice_tipo_comision < len(celdas):
+            # Extraer CATEGORIA según el tipo de tabla
+            # 1. Para actividades complementarias: extraer de columna "PARTICIPACION EN:"
+            if 'CATEGORIA' not in actividad and indice_participacion >= 0:
+                if indice_participacion < len(celdas):
+                    categoria_complementaria = celdas[indice_participacion].strip() if celdas[indice_participacion] else ''
+                    if categoria_complementaria and not re.match(r'^\d+\.?\d*$', categoria_complementaria):
+                        actividad['CATEGORIA'] = categoria_complementaria
+                        actividad['Categoría'] = categoria_complementaria
+                        logger.debug(f"  ✓ Categoría de PARTICIPACION EN extraída (índice {indice_participacion}): '{categoria_complementaria}'")
+                    elif not categoria_complementaria:
+                        logger.debug(f"  ⚠️ Columna PARTICIPACION EN vacía en índice {indice_participacion}")
+            
+            # 2. Para tablas de comisión: extraer categoría de la columna TIPO DE COMISION
+            if 'CATEGORIA' not in actividad and indice_tipo_comision >= 0:
+                if indice_tipo_comision < len(celdas):
                     categoria_comision = celdas[indice_tipo_comision].strip() if celdas[indice_tipo_comision] else ''
                     if categoria_comision:
                         actividad['CATEGORIA'] = categoria_comision
                         actividad['Categoría'] = categoria_comision
-                        logger.debug(f"  Categoría de comisión extraída: '{categoria_comision}'")
+                        logger.debug(f"  ✓ Categoría de comisión extraída (índice {indice_tipo_comision}): '{categoria_comision}'")
+            
+            # 3. Fallback: intentar extraer categoría de headers que contengan "TIPO"
+            if 'CATEGORIA' not in actividad:
+                for j, header in enumerate(headers):
+                    header_upper = header.upper()
+                    if 'TIPO' in header_upper and 'TIPO DE COMISION' not in header_upper and 'PARTICIPACION EN' not in header_upper:
+                        if j < len(celdas):
+                            categoria_tipo = celdas[j].strip() if celdas[j] else ''
+                            # Validar que no sea un número ni el nombre de la actividad
+                            if categoria_tipo and not re.match(r'^\d+\.?\d*$', categoria_tipo) and categoria_tipo != nombre:
+                                actividad['CATEGORIA'] = categoria_tipo
+                                actividad['Categoría'] = categoria_tipo
+                                logger.debug(f"  Categoría extraída de columna TIPO (índice {j}): '{categoria_tipo}'")
+                                break
             
             # Asegurar que CATEGORIA esté presente (incluso si está vacía)
             if 'CATEGORIA' not in actividad:
                 actividad['CATEGORIA'] = ''
                 actividad['Categoría'] = ''
+                logger.debug(f"  ⚠️ No se pudo extraer categoría, asignando vacía")
             
             actividades.append(actividad)
         

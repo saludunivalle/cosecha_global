@@ -594,6 +594,18 @@ def flujo_completo(
         # 4. Preparar hoja del período
         logger.info(f"\n[PASO 4/5] Preparando hoja para período {target_period}...")
         try:
+            # Por ejemplo, intenta obtener los períodos disponibles
+            periodos_disponibles = scraper.obtener_periodos_disponibles()
+            if not periodos_disponibles:
+                raise Exception("El sistema externo no devolvió períodos disponibles.")
+            logger.info("✓ Sistema externo disponible, se puede continuar.")
+        except Exception as e:
+            error_msg = f"No se pudo verificar el sistema externo: {e}"
+            logger.error(error_msg, exc_info=True)
+            errores_criticos.append(error_msg)
+            raise
+
+        try:
             if target_sheet_url:
                 period_manager.prepare_single_period_sheet(
                     sheet_url=target_sheet_url,
