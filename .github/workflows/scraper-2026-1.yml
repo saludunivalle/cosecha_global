@@ -12,7 +12,7 @@ on:
       source_worksheet:
         description: 'Hoja fuente (worksheet)'
         required: false
-        default: '2025-2'
+        default: '2026-1'
       source_column:
         description: 'Columna de cédulas'
         required: false
@@ -194,7 +194,7 @@ jobs:
           
           echo "🚀 Iniciando scraper para período 2026-1..."
           echo "   Período objetivo: $TARGET_PERIOD"
-          echo "   Hoja fuente: ${{ inputs.source_worksheet || '2025-2' }}"
+          echo "   Hoja fuente: ${{ inputs.source_worksheet || '2026-1' }}"
           echo "   Columna: ${{ inputs.source_column || 'D' }}"
           
           python main.py \
@@ -202,7 +202,7 @@ jobs:
             --source-sheet-url "$SHEET_URL_SOURCE" \
             --target-sheet-url "$SHEET_URL_TARGET" \
             --target-period "$TARGET_PERIOD" \
-            --source-worksheet "${{ inputs.source_worksheet || '2025-2' }}" \
+            --source-worksheet "${{ inputs.source_worksheet || '2026-1' }}" \
             --source-column "${{ inputs.source_column || 'D' }}" \
             --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}
         continue-on-error: true
