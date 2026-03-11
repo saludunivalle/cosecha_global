@@ -2118,28 +2118,60 @@ class UnivalleScraper:
             es_fila_categorias = False
             categorias_encontradas = 0
             total_celdas_no_vacias = 0
+            celdas_con_texto_largo = 0
+            celdas_con_numeros = 0
             
-            # Verificar si TODAS las celdas no vacías son categorías conocidas
+            # Verificar si la mayoría de celdas no vacías son categorías conocidas
             for celda in segunda_fila_celdas:
                 celda_upper = celda.strip().upper() if celda else ''
                 if celda_upper:
                     total_celdas_no_vacias += 1
-                    # Verificar que la celda sea EXACTAMENTE una categoría (no contiene texto adicional largo)
-                    # y NO sea un número (las horas no son categorías)
-                    if not re.match(r'^\d+\.?\d*$', celda_upper):
-                        for cat in categorias_conocidas:
-                            if cat in celda_upper and len(celda_upper) < 50:  # Categorías son cortas
-                                categorias_encontradas += 1
-                                break
+                    
+                    # Verificar si es un número (probablemente horas, no categoría)
+                    if re.match(r'^\d+\.?\d*$', celda_upper):
+                        celdas_con_numeros += 1
+                        logger.debug(f"  Celda con número detectada: '{celda_upper}'")
+                        continue
+                    
+                    # Verificar si es texto muy largo (probablemente nombre de actividad, no categoría)
+                    if len(celda_upper) > 50:
+                        celdas_con_texto_largo += 1
+                        logger.debug(f"  Celda con texto largo detectada: '{celda_upper[:30]}...'")
+                        continue
+                    
+                    # Verificar si coincide con alguna categoría conocida
+                    for cat in categorias_conocidas:
+                        if cat in celda_upper:
+                            categorias_encontradas += 1
+                            logger.debug(f"  Categoría encontrada: '{celda_upper}' (coincide con '{cat}')")
+                            break
             
-            # Solo es fila de categorías si TODAS las celdas no vacías son categorías (no hay horas ni nombres largos)
-            if total_celdas_no_vacias > 0 and categorias_encontradas == total_celdas_no_vacias:
-                categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
-                inicio_datos = 2  # Los datos empiezan en la fila 2
-                es_fila_categorias = True
-                logger.info(f"✓ Categorías detectadas en segunda fila: {categorias_segunda_fila}")
-            else:
-                logger.debug(f"❌ Segunda fila NO es fila de categorías (es datos normales): categorias_encontradas={categorias_encontradas}, total_celdas={total_celdas_no_vacias}")
+            # Es fila de categorías si:
+            # 1. Hay al menos una categoría encontrada
+            # 2. No hay números (las horas van en filas posteriores)
+            # 3. No hay texto muy largo (los nombres van en filas posteriores)
+            # 4. Al menos el 50% de las celdas no vacías son categorías
+            if total_celdas_no_vacias > 0:
+                porcentaje_categorias = (categorias_encontradas / total_celdas_no_vacias) * 100
+                logger.debug(
+                    f"Análisis de segunda fila: {categorias_encontradas}/{total_celdas_no_vacias} categorías ({porcentaje_categorias:.1f}%), "
+                    f"{celdas_con_numeros} números, {celdas_con_texto_largo} textos largos"
+                )
+                
+                if (categorias_encontradas > 0 and 
+                    celdas_con_numeros == 0 and 
+                    celdas_con_texto_largo == 0 and 
+                    porcentaje_categorias >= 50):
+                    categorias_segunda_fila = [c.strip() if c else '' for c in segunda_fila_celdas]
+                    inicio_datos = 2  # Los datos empiezan en la fila 2
+                    es_fila_categorias = True
+                    logger.info(f"✓ Categorías detectadas en segunda fila ({porcentaje_categorias:.1f}%): {categorias_segunda_fila}")
+                else:
+                    logger.debug(
+                        f"❌ Segunda fila NO es fila de categorías: "
+                        f"categorias={categorias_encontradas}, numeros={celdas_con_numeros}, "
+                        f"largos={celdas_con_texto_largo}, porcentaje={porcentaje_categorias:.1f}%"
+                    )
         
         logger.debug(f"Actividades genéricas - Índices: Horas={indice_horas}, Nombre={indice_nombre}, Inicio datos={inicio_datos}")
         
@@ -2160,12 +2192,17 @@ class UnivalleScraper:
                         columnas_datos[j].append(celda_valor)
             
             # Procesar cada columna que tenga categoría
+            logger.info(f"🔍 Procesando {len([c for c in categorias_segunda_fila if c])} columnas con categorías...")
             for j, categoria in enumerate(categorias_segunda_fila):
                 if not categoria:
+                    logger.debug(f"  Columna {j}: Sin categoría, saltando")
                     continue
                 
                 if j not in columnas_datos or not columnas_datos[j]:
+                    logger.debug(f"  Columna {j} ('{categoria}'): Sin datos, saltando")
                     continue
+                
+                logger.debug(f"  Columna {j} ('{categoria}'): Procesando {len(columnas_datos[j])} valores: {columnas_datos[j]}")
                 
                 # En cada columna, buscar el nombre (texto) y las horas (número)
                 nombre_actividad = ''
@@ -2174,10 +2211,14 @@ class UnivalleScraper:
                 for valor in columnas_datos[j]:
                     if re.match(r'^\d+\.?\d*$', valor):
                         # Es un número, probablemente las horas
-                        horas_actividad = valor
+                        if not horas_actividad:  # Solo tomar el primero
+                            horas_actividad = valor
+                            logger.debug(f"    Horas encontradas: '{valor}'")
                     else:
                         # Es texto, probablemente el nombre
-                        nombre_actividad = valor
+                        if not nombre_actividad:  # Solo tomar el primero
+                            nombre_actividad = valor
+                            logger.debug(f"    Nombre encontrado: '{valor}'")
                 
                 # Si encontramos ambos (nombre y horas), crear la actividad
                 if nombre_actividad and horas_actividad:
@@ -2191,9 +2232,16 @@ class UnivalleScraper:
                         'Horas Semestre': horas_actividad,
                     }
                     actividades.append(actividad)
-                    logger.debug(f"  ✓ Actividad columna {j}: Categoría='{categoria}', Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+                    logger.info(f"  ✓ Actividad creada - Columna {j}: Categoría='{categoria}', Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+                elif nombre_actividad and not horas_actividad:
+                    # Si hay nombre pero no horas, intentar con horas = 0 o buscar en headers
+                    logger.warning(f"  ⚠️ Columna {j} ('{categoria}'): Tiene nombre pero no horas. Nombre='{nombre_actividad}'")
+                    # Buscar horas en la tabla original o en los valores no procesados
+                    # Por ahora, marcar como incompleta
+                elif horas_actividad and not nombre_actividad:
+                    logger.warning(f"  ⚠️ Columna {j} ('{categoria}'): Tiene horas pero no nombre. Horas='{horas_actividad}'")
                 else:
-                    logger.warning(f"  ⚠️ Columna {j} incompleta: Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
+                    logger.warning(f"  ⚠️ Columna {j} ('{categoria}'): Incompleta - Nombre='{nombre_actividad}', Horas='{horas_actividad}'")
             
             return actividades
         
