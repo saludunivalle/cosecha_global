@@ -36,7 +36,7 @@ TARGET_PERIOD = os.getenv('TARGET_PERIOD', '')
 
 # Google Sheets API Configuration
 SHEETS_READ_TIMEOUT = int(os.getenv('SHEETS_READ_TIMEOUT', '120'))  # segundos
-SHEETS_BATCH_SIZE = int(os.getenv('SHEETS_BATCH_SIZE', '1000'))  # filas por batch
+SHEETS_BATCH_SIZE = int(os.getenv('SHEETS_BATCH_SIZE', '1200'))  # filas por batch
 SHEETS_MAX_RETRIES = int(os.getenv('SHEETS_MAX_RETRIES', '5'))
 SHEETS_RETRY_DELAY = int(os.getenv('SHEETS_RETRY_DELAY', '5'))  # segundos iniciales
 SHEETS_BACKOFF_FACTOR = float(os.getenv('SHEETS_BACKOFF_FACTOR', '2'))  # multiplicador de delay
