@@ -29,7 +29,7 @@ def validar_cedula(cedula: str) -> bool:
     if not cedula_limpia.isdigit():
         return False
     
-    if len(cedula_limpia) < 7 or len(cedula_limpia) > 10:
+    if len(cedula_limpia) < 6 or len(cedula_limpia) > 11:
         return False
     
     return True
