@@ -2912,7 +2912,7 @@ class UnivalleScraper:
         vinculacion = info.vinculacion or ''
         dedicacion = info.dedicacion or ''
         nivel = info.nivel_alcanzado or ''
-        cargo = info.cargo or ''
+        cargo = (info.cargo or '').strip() or 'SIN CARGO'
         categoria_info = info.categoria or ''
         
         logger.debug(f"Procesando actividades para período {periodo_label}")
@@ -3260,6 +3260,11 @@ class UnivalleScraper:
         if escuela_desde_dept:
             escuela_limpia = escuela_desde_dept
         
+        # Asegurar valor por defecto de cargo cuando no viene informado
+        cargo_normalizado = str(cargo).strip() if cargo else ''
+        if not cargo_normalizado:
+            cargo_normalizado = 'SIN CARGO'
+
         # Construir diccionario (todos los campos en orden correcto)
         actividad_dict = {
             'cedula': str(cedula),
@@ -3276,7 +3281,7 @@ class UnivalleScraper:
             'vinculacion': str(vinculacion),
             'dedicacion': str(dedicacion),
             'nivel': str(nivel) if nivel else '',
-            'cargo': str(cargo) if cargo else '',
+            'cargo': cargo_normalizado,
             'departamento_profesor': departamento_original or departamento_limpio,  # departamento (con minúscula) - valor original sin limpiar
             **kwargs
         }
