@@ -21,10 +21,7 @@ on:
         description: 'Delay entre cédulas (segundos)'
         required: false
         default: '1.0'
-      max_cedulas:
-        description: 'Máximo de cédulas a procesar (vacío = todas)'
-        required: false
-        default: '30'
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
