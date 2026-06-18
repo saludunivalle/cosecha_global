@@ -102,7 +102,7 @@ class PeriodManager:
             hoja_nombre = f"Periodo_{periodo_label}"
             headers_principales = headers.get('principal', [
                 'Cédula', 'Nombre', 'Apellido1', 'Apellido2',
-                'Escuela', 'Departamento', 'Período'
+                'Escuela', 'Departamento', 'Período', 'Fecha'
             ])
             
             self.sheets_service.crear_hoja(
@@ -120,7 +120,7 @@ class PeriodManager:
             
             for tipo in tipos_actividades:
                 hoja_tipo_nombre = f"{hoja_nombre}_{tipo}"
-                headers_tipo = headers.get(tipo.lower(), ['Cédula', 'Período', 'Detalles'])
+                headers_tipo = headers.get(tipo.lower(), ['Cédula', 'Período', 'Detalles', 'Fecha'])
                 
                 self.sheets_service.crear_hoja(
                     hoja_tipo_nombre,
@@ -278,7 +278,7 @@ class PeriodManager:
         Headers utilizados:
             cedula, nombre profesor, escuela, departamento, tipo actividad,
             categoría, nombre actividad, número de horas, periodo,
-            actividad, vinculación, dedicación, nivel
+            actividad, vinculación, dedicación, nivel, fecha
         
         Raises:
             ValueError: Si el período no está especificado o tiene formato inválido
@@ -300,7 +300,7 @@ class PeriodManager:
         
         logger.info(f"Preparando hoja para período: {period}")
         
-        # Headers especificados (13 columnas)
+        # Headers especificados (17 columnas)
         #No están, Porcentaje horas, Detalle actividad Sí se necesita 4 y 3 de dicciembre, tambien hay algo del cargo, Cargo y departamento
         #Porcentaje horas no se necesita, Detalle actividad es lom mismo que nombre actividad, cargo es lo mismo que vincuclacion
         headers = [
@@ -321,7 +321,8 @@ class PeriodManager:
             'Dedicación',
             'Nivel',
             'Cargo',
-            'departamento'
+            'departamento',
+            'Fecha'
         ]
         
         # Obtener o crear conexión a la hoja de cálculo

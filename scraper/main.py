@@ -8,7 +8,7 @@ import argparse
 import time
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 import json
 import os
@@ -55,6 +55,12 @@ def configurar_logging():
             logging.StreamHandler(sys.stdout)
         ]
     )
+
+
+def obtener_fecha_colombia_formateada() -> str:
+    """Retorna la fecha y hora actual de Colombia en formato legible."""
+    zona_colombia = timezone(timedelta(hours=-5))
+    return datetime.now(zona_colombia).strftime('%Y-%m-%d %H:%M:%S')
 
 
 def procesar_docente(
@@ -145,6 +151,7 @@ def guardar_datos_en_sheets(
     logger = logging.getLogger(__name__)
     
     info = datos.informacion_personal
+    fecha_registro = obtener_fecha_colombia_formateada()
     
     # Hoja principal del período
     hoja_principal = f"Periodo_{periodo_label}"
@@ -163,6 +170,7 @@ def guardar_datos_en_sheets(
         info.dedicacion,
         info.nivel_alcanzado,
         info.cargo,
+        fecha_registro,
     ]
     
     sheets_service.agregar_fila(hoja_principal, fila_principal)
@@ -181,6 +189,7 @@ def guardar_datos_en_sheets(
                 actividad.grupo,
                 actividad.tipo,
                 actividad.horas_semestre,
+                fecha_registro,
             ]
             filas_pregrado.append(fila)
         
@@ -201,6 +210,7 @@ def guardar_datos_en_sheets(
                 actividad.grupo,
                 actividad.tipo,
                 actividad.horas_semestre,
+                fecha_registro,
             ]
             filas_postgrado.append(fila)
         
@@ -220,6 +230,7 @@ def guardar_datos_en_sheets(
                 actividad.nombre_proyecto,
                 actividad.aprobado_por,
                 actividad.horas_semestre,
+                fecha_registro,
             ]
             filas_investigacion.append(fila)
         
@@ -246,38 +257,38 @@ def crear_estructura_hojas(period_manager: PeriodManager, num_periodos: int):
             'Cédula', 'Nombre', 'Apellido1', 'Apellido2',
             'Escuela', 'Departamento', 'Período',
             'Vinculación', 'Categoría', 'Dedicación',
-            'Nivel Alcanzado', 'Cargo'
+            'Nivel Alcanzado', 'Cargo', 'Fecha'
         ],
         'pregrado': [
             'Cédula', 'Período', 'Código', 'Nombre Asignatura',
-            'Grupo', 'Tipo', 'Horas Semestre'
+            'Grupo', 'Tipo', 'Horas Semestre', 'Fecha'
         ],
         'postgrado': [
             'Cédula', 'Período', 'Código', 'Nombre Asignatura',
-            'Grupo', 'Tipo', 'Horas Semestre'
+            'Grupo', 'Tipo', 'Horas Semestre', 'Fecha'
         ],
         'investigacion': [
             'Cédula', 'Período', 'Código', 'Nombre Proyecto',
-            'Aprobado Por', 'Horas Semestre'
+            'Aprobado Por', 'Horas Semestre', 'Fecha'
         ],
         'tesis': [
             'Cédula', 'Período', 'Código Estudiante', 'Título Tesis',
-            'Plan', 'Horas Semestre'
+            'Plan', 'Horas Semestre', 'Fecha'
         ],
         'extension': [
-            'Cédula', 'Período', 'Tipo', 'Nombre', 'Horas Semestre'
+            'Cédula', 'Período', 'Tipo', 'Nombre', 'Horas Semestre', 'Fecha'
         ],
         'administrativas': [
-            'Cédula', 'Período', 'Cargo', 'Descripción', 'Horas Semestre'
+            'Cédula', 'Período', 'Cargo', 'Descripción', 'Horas Semestre', 'Fecha'
         ],
         'complementarias': [
-            'Cédula', 'Período', 'Tipo', 'Descripción', 'Horas Semestre'
+            'Cédula', 'Período', 'Tipo', 'Descripción', 'Horas Semestre', 'Fecha'
         ],
         'intelectuales': [
-            'Cédula', 'Período', 'Título', 'Tipo', 'Descripción'
+            'Cédula', 'Período', 'Título', 'Tipo', 'Descripción', 'Fecha'
         ],
         'comision': [
-            'Cédula', 'Período', 'Tipo Comisión', 'Descripción'
+            'Cédula', 'Período', 'Tipo Comisión', 'Descripción', 'Fecha'
         ],
     }
     
@@ -375,7 +386,7 @@ def escribir_actividades_en_hojas(
         actividades_por_periodo: Diccionario con período como clave y lista de actividades
         logger: Logger para registrar
     """
-    # 18 columnas en el orden correcto (según period_manager.py)
+    # 17 columnas en el orden correcto (según period_manager.py)
     headers = [
         'Cedula',              # 1
         'Nombre Profesor',     # 2
@@ -392,14 +403,16 @@ def escribir_actividades_en_hojas(
         'Dedicación',          # 13
         'Nivel',               # 14
         'Cargo',               # 15
-        'departamento'         # 16 - departamento del profesor (minúscula)
+        'departamento',        # 16 - departamento del profesor (minúscula)
+        'Fecha'                # 17
     ]
     
     for periodo_label, actividades in actividades_por_periodo.items():
         try:
             logger.debug(f"Escribiendo {len(actividades)} actividades para período {periodo_label}")
+            fecha_registro = obtener_fecha_colombia_formateada()
             
-            # Convertir diccionarios a listas de valores (13 columnas)
+            # Convertir diccionarios a listas de valores (17 columnas)
             filas = []
             contador = 0
             for actividad in actividades:
@@ -439,13 +452,14 @@ def escribir_actividades_en_hojas(
                     actividad.get('nivel', ''),               # 14. Nivel
                     actividad.get('cargo', ''),               # 15. Cargo
                     actividad.get('departamento_profesor', actividad.get('departamento', '')),  # 16. departamento del profesor
+                    fecha_registro,                           # 17. Fecha
                 ]
                 
                 # Validar cantidad de columnas antes de escribir
-                if len(row_data) != 16:
+                if len(row_data) != 17:
                     logger.error(
                         f"❌ Row inválido para {actividad.get('cedula', '')}: "
-                        f"tiene {len(row_data)} columnas, esperadas 16"
+                        f"tiene {len(row_data)} columnas, esperadas 17"
                     )
                     logger.error(f"   Row: {row_data}")
                     continue
