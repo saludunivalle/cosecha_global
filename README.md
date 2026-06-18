@@ -1,5 +1,18 @@
 # Sistema de Gestión de Asignaciones Académicas
 
+# Sistema de Gestión de Asignaciones Académicas
+
+Este sistema permite gestionar, consultar y visualizar las asignaciones académicas de los docentes de la Universidad del Valle. Está diseñado para facilitar el seguimiento de actividades, periodos y cargas académicas, integrando una aplicación web moderna (Next.js) y un scraper en Python que automatiza la recolección y actualización de datos desde fuentes institucionales y Google Sheets.
+
+**¿Para qué sirve?**
+
+- Permite a los docentes y administradores consultar de manera centralizada las actividades y periodos asignados.
+- Automatiza la extracción y actualización de información académica desde sistemas externos y hojas de cálculo.
+- Facilita la visualización y análisis de la carga académica por periodo, docente y tipo de actividad.
+- Proporciona una interfaz web intuitiva y un backend flexible para adaptarse a las necesidades de gestión académica.
+
+---
+
 Sistema para la gestión y consulta de asignaciones académicas de docentes de la Universidad del Valle.
 
 ## 🚀 Instalación y Configuración
