@@ -1,4 +1,4 @@
-name: Scraper - Periodo 2026-1
+name: Scraper - Periodo 2026-2
 
 on:
   # Ejecutar automáticamente a las 3:00 AM hora Colombia (UTC-5) todos los días
@@ -12,7 +12,7 @@ on:
       source_worksheet:
         description: 'Hoja fuente (worksheet)'
         required: false
-        default: '2026-1'
+        default: '2026-2'
       source_column:
         description: 'Columna de cédulas'
         required: false
@@ -21,7 +21,10 @@ on:
         description: 'Delay entre cédulas (segundos)'
         required: false
         default: '1.0'
-
+      max_cedulas:
+        description: 'Máximo de cédulas a procesar (vacío = todas)'
+        required: false
+        default: '30'
 jobs:
   scrape:
     runs-on: ubuntu-latest
@@ -180,7 +183,7 @@ jobs:
           DEFAULT_PERIODOS_COUNT: ${{ vars.DEFAULT_PERIODOS_COUNT || '8' }}
           
           # Período objetivo a procesar
-          TARGET_PERIOD: "2026-1"
+          TARGET_PERIOD: "2026-2"
           
           # Logging
           LOG_LEVEL: INFO
@@ -192,19 +195,21 @@ jobs:
         run: |
           set -e  # Salir en caso de error
           
-          echo "🚀 Iniciando scraper para período 2026-1..."
+          echo "🚀 Iniciando scraper para período 2026-2..."
           echo "   Período objetivo: $TARGET_PERIOD"
-          echo "   Hoja fuente: ${{ inputs.source_worksheet || '2026-1' }}"
+          echo "   Hoja fuente: ${{ inputs.source_worksheet || '2026-2' }}"
           echo "   Columna: ${{ inputs.source_column || 'D' }}"
+          echo "   Máximo de cédulas: ${{ inputs.max_cedulas || '30' }}"
           
           python main.py \
             --modo completo \
             --source-sheet-url "$SHEET_URL_SOURCE" \
             --target-sheet-url "$SHEET_URL_TARGET" \
             --target-period "$TARGET_PERIOD" \
-            --source-worksheet "${{ inputs.source_worksheet || '2026-1' }}" \
+            --source-worksheet "${{ inputs.source_worksheet || '2026-2' }}" \
             --source-column "${{ inputs.source_column || 'D' }}" \
-            --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }}
+            --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }} \
+            --max-cedulas ${{ inputs.max_cedulas || '30' }}
         continue-on-error: true
         id: scrape_run
       
@@ -212,7 +217,7 @@ jobs:
         if: failure() || steps.scrape_run.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: scraper-logs-2026-1-${{ github.run_number }}-${{ github.run_attempt }}
+          name: scraper-logs-2026-2-${{ github.run_number }}-${{ github.run_attempt }}
           path: |
             scraper/scraper.log
           retention-days: 7
@@ -243,7 +248,7 @@ jobs:
       - name: Success summary
         if: success()
         run: |
-          echo "✅ Scraper ejecutado exitosamente para período 2026-1"
+          echo "✅ Scraper ejecutado exitosamente para período 2026-2"
           if [ -f scraper/scraper.log ]; then
             echo ""
             echo "Resumen del log:"
