@@ -445,25 +445,37 @@ class PeriodManager:
             logger.error(f"Error preparando hoja '{nombre_hoja}': {e}", exc_info=True)
             raise
         
-        # Escribir la fecha/hora actual de Colombia en la primera celda de la columna 'Fecha' (fila 2)
+        # Registrar la fecha/hora actual de Colombia en la hoja 'Escuelas' columna C (filas 2-9)
         try:
-            col_fecha = len(headers)
-            try:
-                celda_valor = worksheet.cell(2, col_fecha).value
-            except Exception:
-                celda_valor = None
+            escuelas_ws = self.sheets_service.obtener_hoja('Escuelas', crear_si_no_existe=True)
 
-            if not celda_valor:
-                zona_colombia = timezone(timedelta(hours=-5))
-                ts = datetime.now(zona_colombia).strftime('%Y-%m-%d %H:%M:%S')
+            # Asegurar que la columna C tenga el header 'Fecha'
+            try:
+                header_val = escuelas_ws.cell(1, 3).value or ''
+            except Exception:
+                header_val = ''
+
+            if str(header_val).strip().lower() != 'fecha':
                 try:
-                    worksheet.update_cell(2, col_fecha, ts)
-                    logger.info(f"Fecha registrada en '{nombre_hoja}' fila 2 columna {col_fecha}")
+                    escuelas_ws.update_cell(1, 3, 'Fecha')
+                    logger.info("Header 'Fecha' actualizado en hoja 'Escuelas' columna C")
                 except Exception as e:
-                    logger.warning(f"No se pudo escribir la fecha en la hoja '{nombre_hoja}': {e}")
+                    logger.warning(f"No se pudo actualizar el header 'Fecha' en 'Escuelas': {e}")
+
+            zona_colombia = timezone(timedelta(hours=-5))
+            ts = datetime.now(zona_colombia).strftime('%Y-%m-%d %H:%M:%S')
+
+            # Escribir en las primeras 8 filas bajo el header (filas 2..9)
+            for row_idx in range(2, 10):
+                try:
+                    escuelas_ws.update_cell(row_idx, 3, ts)
+                except Exception as e:
+                    logger.warning(f"No se pudo escribir fecha en 'Escuelas' fila {row_idx}: {e}")
+
+            logger.info("Fecha registrada en 'Escuelas' columna C filas 2-9")
 
         except Exception as e:
-            logger.warning(f"Error al intentar registrar la fecha en '{nombre_hoja}': {e}")
+            logger.warning(f"Error al intentar registrar la fecha en la hoja 'Escuelas': {e}")
 
         logger.info(f"✓ Hoja '{nombre_hoja}' preparada exitosamente")
 
