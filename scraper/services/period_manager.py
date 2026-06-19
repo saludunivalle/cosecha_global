@@ -5,7 +5,7 @@ Gestor de períodos académicos
 import logging
 import os
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import gspread.exceptions
 
@@ -445,5 +445,37 @@ class PeriodManager:
             logger.error(f"Error preparando hoja '{nombre_hoja}': {e}", exc_info=True)
             raise
         
+        # Registrar la fecha/hora actual de Colombia en la hoja 'Escuelas' columna C (filas 2-9)
+        try:
+            escuelas_ws = self.sheets_service.obtener_hoja('Escuelas', crear_si_no_existe=True)
+
+            # Asegurar que la columna C tenga el header 'Fecha'
+            try:
+                header_val = escuelas_ws.cell(1, 3).value or ''
+            except Exception:
+                header_val = ''
+
+            if str(header_val).strip().lower() != 'fecha':
+                try:
+                    escuelas_ws.update_cell(1, 3, 'Fecha')
+                    logger.info("Header 'Fecha' actualizado en hoja 'Escuelas' columna C")
+                except Exception as e:
+                    logger.warning(f"No se pudo actualizar el header 'Fecha' en 'Escuelas': {e}")
+
+            zona_colombia = timezone(timedelta(hours=-5))
+            ts = datetime.now(zona_colombia).strftime('%Y-%m-%d %H:%M:%S')
+
+            # Escribir en las primeras 8 filas bajo el header (filas 2..9)
+            for row_idx in range(2, 10):
+                try:
+                    escuelas_ws.update_cell(row_idx, 3, ts)
+                except Exception as e:
+                    logger.warning(f"No se pudo escribir fecha en 'Escuelas' fila {row_idx}: {e}")
+
+            logger.info("Fecha registrada en 'Escuelas' columna C filas 2-9")
+
+        except Exception as e:
+            logger.warning(f"Error al intentar registrar la fecha en la hoja 'Escuelas': {e}")
+
         logger.info(f"✓ Hoja '{nombre_hoja}' preparada exitosamente")
 
