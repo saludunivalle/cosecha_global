@@ -5,7 +5,7 @@ Gestor de períodos académicos
 import logging
 import os
 from typing import List, Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 import gspread.exceptions
 
@@ -445,5 +445,25 @@ class PeriodManager:
             logger.error(f"Error preparando hoja '{nombre_hoja}': {e}", exc_info=True)
             raise
         
+        # Escribir la fecha/hora actual de Colombia en la primera celda de la columna 'Fecha' (fila 2)
+        try:
+            col_fecha = len(headers)
+            try:
+                celda_valor = worksheet.cell(2, col_fecha).value
+            except Exception:
+                celda_valor = None
+
+            if not celda_valor:
+                zona_colombia = timezone(timedelta(hours=-5))
+                ts = datetime.now(zona_colombia).strftime('%Y-%m-%d %H:%M:%S')
+                try:
+                    worksheet.update_cell(2, col_fecha, ts)
+                    logger.info(f"Fecha registrada en '{nombre_hoja}' fila 2 columna {col_fecha}")
+                except Exception as e:
+                    logger.warning(f"No se pudo escribir la fecha en la hoja '{nombre_hoja}': {e}")
+
+        except Exception as e:
+            logger.warning(f"Error al intentar registrar la fecha en '{nombre_hoja}': {e}")
+
         logger.info(f"✓ Hoja '{nombre_hoja}' preparada exitosamente")
 
