@@ -196,7 +196,6 @@ jobs:
           echo "   Período objetivo: $TARGET_PERIOD"
           echo "   Hoja fuente: ${{ inputs.source_worksheet || '2026-2' }}"
           echo "   Columna: ${{ inputs.source_column || 'D' }}"
-          echo "   Máximo de cédulas: ${{ inputs.max_cedulas || '30' }}"
           
           python main.py \
             --modo completo \
@@ -206,7 +205,6 @@ jobs:
             --source-worksheet "${{ inputs.source_worksheet || '2026-2' }}" \
             --source-column "${{ inputs.source_column || 'D' }}" \
             --delay-cedulas ${{ inputs.delay_cedulas || '1.0' }} \
-            --max-cedulas ${{ inputs.max_cedulas || '30' }}
         continue-on-error: true
         id: scrape_run
       
