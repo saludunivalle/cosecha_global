@@ -3278,13 +3278,14 @@ class UnivalleScraper:
             'nombre_actividad': nombre_actividad_limpio,
             'numero_horas': horas_numero,
             'periodo': str(periodo),
-            'detalle_actividad': str(tipo_actividad) or str(codigo_proyecto),  # Detalle actividad - duplicado de nombre_actividad
+            'detalle_actividad': str(codigo_proyecto) if (str(tipo_actividad) == 'Investigación' and codigo_proyecto) else (str(tipo_actividad) or str(codigo_proyecto)),  # Detalle actividad
             'actividad': str(actividad),
             'vinculacion': str(vinculacion),
             'dedicacion': str(dedicacion),
             'nivel': str(nivel) if nivel else '',
             'cargo': cargo_normalizado,
             'departamento_profesor': departamento_original or departamento_limpio,  # departamento (con minúscula) - valor original sin limpiar
+            'codigo': str(codigo_proyecto),
             **kwargs
         }
         
