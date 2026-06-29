@@ -443,7 +443,7 @@ class UnivalleScraper:
             )
             logger.info(f"✓ Agregadas {len(investigacion)} actividades de investigación (por contexto)")
             for act in investigacion:
-                logger.debug(f"  Investigación: Nombre='{act.nombre_proyecto if hasattr(act, 'nombre_proyecto') else 'N/A'}', Horas='{act.horas_semestre if hasattr(act, 'horas_semestre') else 'N/A'}'") 
+                logger.debug(f"  Investigación: Nombre='{act.nombre_proyecto if hasattr(act, 'nombre_proyecto') else 'N/A'}', Horas='{act.horas_semestre if hasattr(act, 'horas_semestre') else 'N/A'}', Codigo='{act.codigo if hasattr(act, 'codigo') else 'N/A'}'") 
             resultado.actividades_investigacion.extend(investigacion)
             return True
         
@@ -1875,7 +1875,7 @@ class UnivalleScraper:
                                      'NOMBRE DEL ANTEPROYECTO' in fila_texto or
                                      'PROPUESTA DE INVESTIGACION' in fila_texto)
             tiene_horas = 'HORAS SEMESTRE' in fila_texto or 'HORAS' in fila_texto
-            
+            codigo = 'CODIGO' in fila_texto
             if tiene_nombre_proyecto and tiene_horas:
                 header_index = i
                 headers_actuales = self.extraer_celdas(filas_internas[i])
@@ -3024,6 +3024,7 @@ class UnivalleScraper:
                 nivel=nivel,
                 cargo=cargo,
                 departamento_original=departamento_original,
+                codigo_proyecto=actividad.codigo or '',
             ))
         
         # Procesar dirección de tesis
@@ -3229,6 +3230,7 @@ class UnivalleScraper:
         nivel: str,
         cargo: str,
         departamento_original: str = '',
+        codigo_proyecto: str = '',
         **kwargs
     ) -> Dict[str, Any]:
         """
@@ -3276,13 +3278,14 @@ class UnivalleScraper:
             'nombre_actividad': nombre_actividad_limpio,
             'numero_horas': horas_numero,
             'periodo': str(periodo),
-            'detalle_actividad': str(tipo_actividad),  # Detalle actividad - duplicado de nombre_actividad
+            'detalle_actividad': str(codigo_proyecto) if (str(tipo_actividad) == 'Investigación' and codigo_proyecto) else (str(tipo_actividad) or str(codigo_proyecto)),  # Detalle actividad
             'actividad': str(actividad),
             'vinculacion': str(vinculacion),
             'dedicacion': str(dedicacion),
             'nivel': str(nivel) if nivel else '',
             'cargo': cargo_normalizado,
             'departamento_profesor': departamento_original or departamento_limpio,  # departamento (con minúscula) - valor original sin limpiar
+            'codigo': str(codigo_proyecto),
             **kwargs
         }
         
