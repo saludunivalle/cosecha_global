@@ -451,6 +451,17 @@ def generar_id_actividad(actividad: Dict[str, Any]) -> str:
     
     return f"{codigo}|{nombre}|{grupo}|{tipo}".lower()
 
+def extraer_codigo_proyecto(actividad: Dict[str, Any]) -> str:
+    """
+    Extrae el código del proyecto de una actividad de investigación.
+    
+    Args:
+        actividad: Diccionario con datos de la actividad
+
+    Returns:
+        Código del proyecto de investigación
+    """
+    return str(actividad.get('CODIGO', '')).strip()
 
 def deduplicar_actividades(actividades: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """

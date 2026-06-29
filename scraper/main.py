@@ -424,8 +424,11 @@ def escribir_actividades_en_hojas(
                 
                 # Obtener el código de tipo y mapearlo a su nombre completo
                 tipo_codigo = actividad.get('tipo', '')
-                detalle_actividad = mapear_tipo_actividad(tipo_codigo)
-                
+                if tipo_codigo != '':
+                    detalle_actividad = mapear_tipo_actividad(tipo_codigo)
+                else:
+                    detalle_actividad = actividad.get('codigo', '')
+
                 row_data = [
                     actividad.get('cedula', ''),              # 1. Cedula
                     actividad.get('nombre_profesor', ''),     # 2. Nombre Profesor
